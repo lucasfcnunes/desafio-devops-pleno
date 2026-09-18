@@ -7,7 +7,8 @@ NODE_BOXES = ['bento/ubuntu-26.04', 'bento/ubuntu-26.04', 'bento/ubuntu-26.04']
 NODE_CPUS = 2
 NODE_MEMORY = 2048
 # Virtualbox >= 6.1.28 require `/etc/vbox/network.conf` for expanded private networks 
-NETWORK_PREFIX = "10.25.0"
+# NETWORK_PREFIX = "10.25.0"
+NETWORK_PREFIX = "192.168.56"
 SUBNET_BASE = "10.25.0.0"
 NETMASK = "255.255.255.0"
 NETWORK_NAME = "k3s-cluster"
@@ -22,11 +23,7 @@ def provision(vm, role, node_num)
   node_ip = "#{NETWORK_PREFIX}.#{100+node_num}"
   # An expanded netmask is required to allow VM<-->VM communication, virtualbox defaults to /32
   vm.network "private_network", ip: node_ip, netmask: "255.255.255.0"
-    # ,
-    # libvirt__network_name: NETWORK_NAME,
-    # libvirt__network_address: SUBNET_BASE,
-    # libvirt__netmask: NETMASK ,
-    # libvirt__dhcp_enabled: false
+  vm.network "forwarded_port", guest: 443, host: 1443 + node_num, host_ip: "0.0.0.0"
 
   vm.provision "ansible", run: 'once' do |ansible|
     ansible.compatibility_mode = "2.0"
