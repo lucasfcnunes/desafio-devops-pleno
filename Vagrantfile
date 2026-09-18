@@ -22,12 +22,14 @@ def provision(vm, role, node_num)
   # assign static IPs to each node, and thus provide a known IP for the API endpoint.
   node_ip = "#{NETWORK_PREFIX}.#{100+node_num}"
   # An expanded netmask is required to allow VM<-->VM communication, virtualbox defaults to /32
-  vm.network "private_network", ip: node_ip, netmask: "255.255.255.0"
-  vm.network "forwarded_port", guest: 443, host: 1443 + node_num, host_ip: "0.0.0.0"
+  vm.network "private_network", ip: node_ip, netmask: NETMASK
+  # vm.network "forwarded_port", guest: 443, host: 1443 + node_num, host_ip: "0.0.0.0"
+
+  vm.synced_folder "./", "/vagrant", automount: false
 
   vm.provision "ansible", run: 'once' do |ansible|
     ansible.compatibility_mode = "2.0"
-    ansible.playbook = "playbooks/site.yml"
+    ansible.playbook = "playbooks/site.yaml"
     ansible.groups = {
       "server" => NODE_ROLES.grep(/^server/),
       "agent" => NODE_ROLES.grep(/^agent/),
@@ -55,21 +57,20 @@ def provision(vm, role, node_num)
 end
 
 Vagrant.configure("2") do |config|
-  # Default provider is libvirt, virtualbox is only provided as a backup
-  config.vm.provider "libvirt" do |v|
-    # v.qemu_use_session = true
-    v.driver = "qemu"
-    # v.driver = "kvm"
-
-    v.cpus = NODE_CPUS
-    v.memory = NODE_MEMORY
-  end
+  # Default provider is virtualbox, libvirt is only provided as a backup
   config.vm.provider "virtualbox" do |v|
     v.cpus = NODE_CPUS
     v.memory = NODE_MEMORY
     v.linked_clone = true
   end
-  
+  config.vm.provider "libvirt" do |v|
+    v.cpus = NODE_CPUS
+    v.memory = NODE_MEMORY
+    # v.qemu_use_session = true
+    v.driver = "qemu"
+    # v.driver = "kvm"
+  end
+
   NODE_ROLES.each_with_index do |name, i|
     config.vm.define name do |node|
       provision(node.vm, name, i)

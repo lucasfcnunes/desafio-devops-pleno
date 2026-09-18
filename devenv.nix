@@ -10,6 +10,7 @@
   env.VAGRANT_WSL_ENABLE_WINDOWS_ACCESS = "1";
   env.LIBVIRT_DEFAULT_URI = "qemu:///session";
   env.VAGRANT_LIBVIRT_URI = config.env.LIBVIRT_DEFAULT_URI;
+  env.VAGRANT_DEFAULT_PROVIDER = "virtualbox";
   # process.managers.process-compose.enable = true;
 
   # https://devenv.sh/packages/
@@ -21,6 +22,7 @@
     # pkgs.qemu_kvm
     # pkgs.virt-manager
     # pkgs.cdrtools
+    pkgs.virtualbox
     pkgs.git
     # pkgs.vagrant
     (pkgs.vagrant.overrideAttrs (oldAttrs: {
