@@ -1,16 +1,17 @@
 # https://github.com/k3s-io/k3s-ansible/blob/dccb5ed4ad7f33fbb4ce76382620f08b28335c3e/Vagrantfile
+require 'ipaddr'
 
 # ENV['VAGRANT_NO_PARALLEL'] = 'no'
 NODE_ROLES = ["server-0", "agent-0", "agent-1"]
-# NODE_BOXES = ['bento/ubuntu-24.04', 'bento/ubuntu-24.04', 'bento/ubuntu-24.04']
-NODE_BOXES = ['bento/ubuntu-26.04', 'bento/ubuntu-26.04', 'bento/ubuntu-26.04']
+NODE_BOXES = ['bento/ubuntu-24.04', 'bento/ubuntu-24.04', 'bento/ubuntu-24.04']
 NODE_CPUS = 2
 NODE_MEMORY = 2048
 # Virtualbox >= 6.1.28 require `/etc/vbox/network.conf` for expanded private networks 
-# NETWORK_PREFIX = "10.25.0"
-NETWORK_PREFIX = "192.168.56"
-SUBNET_BASE = "10.25.0.0"
-NETMASK = "255.255.255.0"
+NODES_SUBNET = IPAddr.new("192.168.56.0/24")
+def get_node_ip(node_num)
+  return (NODES_SUBNET.to_range.to_a[10 + node_num]).to_s
+end
+SERVER_API_IP = get_node_ip(0)
 NETWORK_NAME = "k3s-cluster"
 
 def provision(vm, role, node_num)
@@ -20,10 +21,17 @@ def provision(vm, role, node_num)
   # during provisioning. This makes it impossible to know the server-0 IP when 
   # provisioning subsequent servers and agents. A private network allows us to
   # assign static IPs to each node, and thus provide a known IP for the API endpoint.
-  node_ip = "#{NETWORK_PREFIX}.#{100+node_num}"
+  node_ip = get_node_ip(node_num)
   # An expanded netmask is required to allow VM<-->VM communication, virtualbox defaults to /32
   # vm.network "private_network", hostname: true, ip: node_ip, netmask: NETMASK
-  vm.network "private_network", type: "dhcp"
+  vm.network "private_network",
+    hostname: true,
+    libvirt__forward_mode: "nat",
+    libvirt__dhcp_enabled: true,
+    # libvirt__network_name: NETWORK_NAME,
+    libvirt__network_address: NODES_SUBNET.to_s + "/" + NODES_SUBNET.prefix.to_s,
+    ip: node_ip
+  # vm.network "private_network", type: "dhcp"
   # vm.network "forwarded_port", guest: 443, host: 1443 + node_num, host_ip: "0.0.0.0"
 
   vm.synced_folder "./", "/vagrant", automount: false
@@ -38,7 +46,7 @@ def provision(vm, role, node_num)
     }
     ansible.extra_vars = {
       k3s_version: "v1.31.12+k3s1",
-      api_endpoint: "#{NETWORK_PREFIX}.100",
+      api_endpoint: SERVER_API_IP,
       # Required for vagrant ansible provisioner
       token: "myvagrant",
       # Required to use the private network configured above
@@ -59,17 +67,20 @@ end
 
 Vagrant.configure("2") do |config|
   # Default provider is virtualbox, libvirt is only provided as a backup
-  config.vm.provider "virtualbox" do |v|
-    v.cpus = NODE_CPUS
-    v.memory = NODE_MEMORY
-    v.linked_clone = true
-  end
+  # config.vm.provider "virtualbox" do |v|
+  #   v.cpus = NODE_CPUS
+  #   v.memory = NODE_MEMORY
+  #   v.linked_clone = true
+  # end
   config.vm.provider "libvirt" do |v|
+    v.nested = true
+    v.cpu_mode = "host-passthrough"
     v.cpus = NODE_CPUS
     v.memory = NODE_MEMORY
-    # v.qemu_use_session = true
+    v.qemu_use_session = false
     # v.driver = "qemu"
     v.driver = "kvm"
+    v.management_network_name = "vagrant-libvirt"
   end
 
   NODE_ROLES.each_with_index do |name, i|

@@ -8,9 +8,9 @@
 {
   # https://devenv.sh/basics/
   env.VAGRANT_WSL_ENABLE_WINDOWS_ACCESS = "1";
-  env.LIBVIRT_DEFAULT_URI = "qemu:///session";
-  env.VAGRANT_LIBVIRT_URI = config.env.LIBVIRT_DEFAULT_URI;
-  env.VAGRANT_DEFAULT_PROVIDER = "virtualbox";
+  # env.LIBVIRT_DEFAULT_URI = "qemu:///session";
+  # env.VAGRANT_LIBVIRT_URI = config.env.LIBVIRT_DEFAULT_URI;
+  # env.VAGRANT_DEFAULT_PROVIDER = "virtualbox";
   # process.managers.process-compose.enable = true;
 
   # https://devenv.sh/packages/
@@ -31,7 +31,7 @@
         echo '{"version":"1","installed":{}}' > "$out/vagrant-plugins/plugins.json"
         # TODO: https://github.com/NixOS/nixpkgs/issues/348108
         # wrapProgram "$out/bin/vagrant" \
-        # --set-default VAGRANT_LIBVIRT_URI ${config.env.VAGRANT_LIBVIRT_URI} \
+        # --set-default VAGRANT_LIBVIRT_URI $\{config.env.VAGRANT_LIBVIRT_URI} \
         # --set VAGRANT_WSL_ENABLE_WINDOWS_ACCESS 1 \
         # --prefix PATH ':' "/mnt/c/Windows/system32/"
       '';
