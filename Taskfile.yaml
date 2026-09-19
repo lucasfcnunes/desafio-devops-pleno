@@ -1,0 +1,27 @@
+version: '3'
+tasks:
+  ansible:setup:
+    source: ./ansible/requirements.yaml
+    cmds:
+      - ansible-galaxy install -r ./requirements.yaml
+  vagrant:down:
+    dir: ./ansible/k3s-ansible/
+    cmds:
+      - vagrant destroy -f {{.CLI_ARGS}}
+  vagrant:up:
+    dir: ./ansible/k3s-ansible/
+    deps:
+      - ansible:setup
+    cmds:
+      - vagrant up {{.CLI_ARGS}}
+  kubeconfig:cp:
+    vars:
+      SERVER_CMD: 'vagrant ssh server-0 -- '
+      SERVER:
+        sh: echo "https://$({{.SERVER_CMD}} hostname -i):6443"
+    cmds:
+      - mkdir -p ~/.kube/
+      - >-
+        {{.SERVER_CMD}} sudo cat /etc/rancher/k3s/k3s.yaml
+        | yq '.clusters[0].cluster.server = "{{.SERVER}}"'
+        > ~/.kube/k3s.yaml

@@ -18,6 +18,8 @@
     pkgs.sops
     pkgs.ansible
     pkgs.go-task
+    pkgs.yq-go
+    pkgs.kubectl
     # pkgs.libvirt
     # pkgs.qemu_kvm
     # pkgs.virt-manager

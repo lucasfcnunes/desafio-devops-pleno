@@ -3,16 +3,18 @@ require 'ipaddr'
 
 # ENV['VAGRANT_NO_PARALLEL'] = 'no'
 NODE_ROLES = ["server-0", "agent-0", "agent-1"]
+# NODE_BOXES = ['boxen/nixos-25.05', 'boxen/nixos-25.05', 'boxen/nixos-25.05']
 NODE_BOXES = ['bento/ubuntu-24.04', 'bento/ubuntu-24.04', 'bento/ubuntu-24.04']
-NODE_CPUS = 2
-NODE_MEMORY = 2048
+# NODE_CPUS = 2
+# NODE_MEMORY = 2048
+NODE_CPUS = 4
+NODE_MEMORY = 4096
 # Virtualbox >= 6.1.28 require `/etc/vbox/network.conf` for expanded private networks 
 NODES_SUBNET = IPAddr.new("192.168.56.0/24")
 def get_node_ip(node_num)
   return (NODES_SUBNET.to_range.to_a[10 + node_num]).to_s
 end
 SERVER_API_IP = get_node_ip(0)
-NETWORK_NAME = "k3s-cluster"
 
 def provision(vm, role, node_num)
   vm.box = NODE_BOXES[node_num]
@@ -38,28 +40,39 @@ def provision(vm, role, node_num)
 
   vm.provision "ansible", run: 'once' do |ansible|
     ansible.compatibility_mode = "2.0"
-    ansible.playbook = "playbooks/site.yaml"
+    # ansible.playbook = "ansible/k3s-ansible/playbooks/site.yml"
+    ansible.playbook = "./ansible/playbooks/site.yaml"
     ansible.groups = {
       "server" => NODE_ROLES.grep(/^server/),
       "agent" => NODE_ROLES.grep(/^agent/),
       "k3s_cluster:children" => ["server", "agent"],
     }
     ansible.extra_vars = {
-      k3s_version: "v1.31.12+k3s1",
+      k3s_version: "v1.37.0+k3s1",
       api_endpoint: SERVER_API_IP,
       # Required for vagrant ansible provisioner
       token: "myvagrant",
       # Required to use the private network configured above
-      extra_server_args: "--node-external-ip #{node_ip} --flannel-iface eth1 --disable=traefik", 
-      extra_agent_args: "--node-external-ip #{node_ip} --flannel-iface eth1 --disable=traefik",
+      extra_server_args: "--node-external-ip #{node_ip} --flannel-iface eth1", 
+      extra_agent_args: "--node-external-ip #{node_ip} --flannel-iface eth1",
       # Airgap setup, left as reference
       # airgap_dir: "./my_airgap",
       # Optional, left as reference for ruby-ansible syntax
       # extra_service_envs: [ "NO_PROXY='localhost'" ],
-      # server_config_yaml: <<~YAML
-      #   write-kubeconfig-mode: 644
-      #   kube-apiserver-arg:
-      #     - advertise-port=1234
+      server_config_yaml: <<~YAML
+        # write-kubeconfig-mode: 644
+        # kube-apiserver-arg:
+        #   - advertise-port=1234
+        # flannel-backend: 'none'
+        disable:
+          - traefik
+          # - coredns
+      YAML
+      # agent_config_yaml: <<~YAML
+      #   with-node-id: true
+      #   node-label:
+      #     - "foo=bar"
+      #     - "hello=world"
       # YAML
     }
   end
