@@ -14,20 +14,19 @@
   # process.managers.process-compose.enable = true;
 
   # https://devenv.sh/packages/
-  packages = [
-    pkgs.sops
-    pkgs.ansible
-    pkgs.go-task
-    pkgs.yq-go
-    pkgs.kubectl
-    # pkgs.libvirt
-    # pkgs.qemu_kvm
-    # pkgs.virt-manager
-    # pkgs.cdrtools
-    pkgs.virtualbox
-    pkgs.git
-    # pkgs.vagrant
-    (pkgs.vagrant.overrideAttrs (oldAttrs: {
+  packages = let
+    my-kubernetes-helm = with pkgs; wrapHelm kubernetes-helm {
+      plugins = with pkgs.kubernetes-helmPlugins; [
+        helm-secrets
+        helm-diff
+        helm-s3
+        helm-git
+      ];
+    };
+    my-helmfile = pkgs.helmfile-wrapped.override {
+      inherit (my-kubernetes-helm) pluginsDir;
+    };
+    my-vagrant = (pkgs.vagrant.overrideAttrs (oldAttrs: {
       doInstallCheck = false;
       postInstall = oldAttrs.postInstall + ''
         echo '{"version":"1","installed":{}}' > "$out/vagrant-plugins/plugins.json"
@@ -37,7 +36,24 @@
         # --set VAGRANT_WSL_ENABLE_WINDOWS_ACCESS 1 \
         # --prefix PATH ':' "/mnt/c/Windows/system32/"
       '';
-    }))
+    }));
+  in
+  [
+    pkgs.sops
+    pkgs.ansible
+    pkgs.go-task
+    pkgs.yq-go
+    pkgs.kubectl
+    my-kubernetes-helm
+    my-helmfile
+    # pkgs.libvirt
+    # pkgs.qemu_kvm
+    # pkgs.virt-manager
+    # pkgs.cdrtools
+    # pkgs.virtualbox
+    pkgs.git
+    # pkgs.vagrant
+    my-vagrant
   ];
 
   # processes = {

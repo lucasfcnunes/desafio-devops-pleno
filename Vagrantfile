@@ -34,7 +34,7 @@ def provision(vm, role, node_num)
     libvirt__network_address: NODES_SUBNET.to_s + "/" + NODES_SUBNET.prefix.to_s,
     ip: node_ip
   # vm.network "private_network", type: "dhcp"
-  # vm.network "forwarded_port", guest: 443, host: 1443 + node_num, host_ip: "0.0.0.0"
+  # vm.network "forwarded_port", guest: 6443, host: 1443 + node_num, host_ip: "0.0.0.0"
 
   vm.synced_folder "./", "/vagrant", automount: false
 
