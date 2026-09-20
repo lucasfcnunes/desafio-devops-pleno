@@ -7,6 +7,9 @@
 }:
 {
   # https://devenv.sh/basics/
+  env.KUBECTL_EXTERNAL_DIFF = "dyff between --omit-header --set-exit-code";
+  env.HELM_DIFF_OUTPUT = "dyff";
+  env.HELM_DIFF_THREE_WAY_MERGE = "true";
   env.VAGRANT_WSL_ENABLE_WINDOWS_ACCESS = "1";
   # env.LIBVIRT_DEFAULT_URI = "qemu:///session";
   # env.VAGRANT_LIBVIRT_URI = config.env.LIBVIRT_DEFAULT_URI;
@@ -54,6 +57,7 @@
       pkgs.kubectl
       my-kubernetes-helm
       my-helmfile
+      pkgs.dyff
       pkgs.k9s
       # pkgs.libvirt
       # pkgs.qemu_kvm
