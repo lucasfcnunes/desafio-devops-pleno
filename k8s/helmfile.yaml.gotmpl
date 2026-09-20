@@ -3,6 +3,9 @@ repositories:
     url: https://istio-release.storage.googleapis.com/charts
   - name: kiali
     url: https://kiali.org/helm-charts
+  - name: prometheus-community
+    url: ghcr.io/prometheus-community/charts
+    oci: true
   # - name: bedag
   #   url: https://bedag.github.io/helm-charts
   - name: stakater
@@ -66,6 +69,16 @@ releases:
       - istio-system/istiod
     values:
       - ./kiali/values.yaml.gotmpl
+  - chart: prometheus-community/kube-prometheus-stack
+    name: prometheus
+    namespace: monitoring
+    labels:
+      crd: "true"
+      app: kps
+    needs:
+      - istio-system/istiod
+    values:
+      - ./kube-prometheus-stack/values.yaml.gotmpl
   - name: service-1
     labels:
       deployment: yaml
