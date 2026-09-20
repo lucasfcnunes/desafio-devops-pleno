@@ -20,29 +20,39 @@ templates:
     chart: stakater/application
     name: service-x
     namespace: "{{`{{ .Release.Name }}`}}"
+    createNamespace: true
     # installed: false
+    # labels:
+    #   part-of: all-services
+    needs:
+      - istio-system/istiod
     values:
       - deployment:
           image:
             repository: mendhak/http-https-echo
+          env:
+            HTTP_PORT:
+              value: '8080'
+            # HTTPS_PORT:
+            #   value: '8443'
           automountServiceAccountToken: true
         rbac:
           enabled: true
           serviceAccount:
             create: true
-            name: "{{`{{ .Release.Name }}`}}"
+            # name: "{{`{{ .Release.Name }}`}}"
         extraObjects:
-          ns:
-            apiVersion: v1
-            kind: Namespace
-            metadata:
-              name: "{{`{{ .Release.Namespace }}`}}"
-              annotations:
-                helm.sh/hook: pre-install,pre-upgrade
-                helm.sh/hook-weight: "-5"
-                helm.sh/resource-policy: keep
-              labels:
-                istio-injection: enabled
+          # ns:
+          #   apiVersion: v1
+          #   kind: Namespace
+          #   metadata:
+          #     name: "{{`{{ .Release.Namespace }}`}}"
+          #     annotations:
+          #       helm.sh/hook: pre-install,pre-upgrade
+          #       helm.sh/hook-weight: "-5"
+          #       helm.sh/resource-policy: keep
+          #     labels:
+          #       istio-injection: enabled
           peer-authn-strict:
             apiVersion: security.istio.io/v1beta1
             kind: PeerAuthentication
@@ -51,13 +61,33 @@ templates:
             spec:
               mtls:
                 mode: STRICT
+    # wait: true
+    hooks:
+      - events:
+          - presync
+        showlogs: true
+        command: sh
+        args:
+          - -c
+          - kubectl create namespace {{`{{ .Release.Namespace }}`}} --dry-run=client -o yaml | kubectl apply -f -
+      - events:
+          - presync
+        showlogs: true
+        command: sh
+        args:
+          - -c
+          - kubectl label --dry-run=client -o yaml --overwrite namespace {{`{{ .Release.Namespace }}`}} istio-injection=enabled | kubectl apply -f -
 releases:
-  - name: istio-base
-    chart: istio/base
+  - chart: istio/base
+    name: istio-base
     namespace: istio-system
-  - name: istiod
-    chart: istio/istiod
+    labels:
+      app: istio
+  - chart: istio/istiod
+    name: istiod
     namespace: istio-system
+    labels:
+      app: istio
     needs:
       - istio-system/istio-base
     values:

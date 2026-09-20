@@ -205,4 +205,3 @@ Não é necessário gravar vídeo ou fazer apresentação.
 
 - Destrua o ambiente e recrie do zero antes de entregar — isso confirma a reprodutibilidade.
 - A qualidade da documentação tem o mesmo peso que o cluster funcionando.
-

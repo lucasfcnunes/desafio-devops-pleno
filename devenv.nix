@@ -54,6 +54,7 @@
       pkgs.kubectl
       my-kubernetes-helm
       my-helmfile
+      pkgs.k9s
       # pkgs.libvirt
       # pkgs.qemu_kvm
       # pkgs.virt-manager
