@@ -32,10 +32,19 @@ templates:
             repository: mendhak/http-https-echo
           env:
             HTTP_PORT:
-              value: '8080'
+              value: "3000"
             # HTTPS_PORT:
-            #   value: '8443'
+            #   value: '3443'
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
           automountServiceAccountToken: true
+        service:
+          ports:
+            - name: http
+              port: 80
+              targetPort: http
         rbac:
           enabled: true
           serviceAccount:
@@ -100,6 +109,10 @@ releases:
     values:
       - service:
           type: LoadBalancer
+          ports:
+            - name: http
+              port: 81
+              targetPort: http
         deployment:
           image:
             repository: nginx:stable-alpine
@@ -149,7 +162,7 @@ releases:
                     - destination:
                         host: service-2.service-2.svc.cluster.local
                         port:
-                          number: 80
+                          name: http
   - name: service-2
     inherit:
       - template: service-x-release
@@ -175,6 +188,10 @@ releases:
     values:
       - service:
           type: LoadBalancer
+          ports:
+            - name: http
+              port: 83
+              targetPort: http
         extraObjects:
           ra:
             apiVersion: security.istio.io/v1beta1
