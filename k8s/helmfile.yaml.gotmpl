@@ -1,6 +1,8 @@
 repositories:
   - name: istio
     url: https://istio-release.storage.googleapis.com/charts
+  - name: kiali
+    url: https://kiali.org/helm-charts
   # - name: bedag
   #   url: https://bedag.github.io/helm-charts
   - name: stakater
@@ -15,6 +17,7 @@ templates:
     createNamespace: true
     # installed: false
     labels:
+      app: "{{`{{ .Release.Name }}`}}"
       part-of: all-services
     needs:
       - istio-system/istiod
@@ -42,6 +45,7 @@ releases:
     name: istio-base
     namespace: istio-system
     labels:
+      crd: "true"
       app: istio
   - chart: istio/istiod
     name: istiod
@@ -52,6 +56,16 @@ releases:
       - istio-system/istio-base
     values:
       - profile: demo
+  - chart: kiali/kiali-operator
+    name: kiali-operator
+    namespace: kiali-operator
+    labels:
+      crd: "true"
+      app: kiali
+    needs:
+      - istio-system/istiod
+    values:
+      - ./kiali/values.yaml.gotmpl
   - name: service-1
     labels:
       deployment: yaml
