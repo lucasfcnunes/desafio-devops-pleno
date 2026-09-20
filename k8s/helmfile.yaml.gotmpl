@@ -113,9 +113,9 @@ releases:
             - name: http
               port: 81
               targetPort: http
-        deployment:
-          image:
-            repository: nginx:stable-alpine
+        # deployment:
+        #   image:
+        #     repository: nginx:stable-alpine
         extraObjects:
           ra:
             apiVersion: security.istio.io/v1beta1
@@ -162,13 +162,17 @@ releases:
                     - destination:
                         host: service-2.service-2.svc.cluster.local
                         port:
-                          name: http
+                          number: 82
   - name: service-2
     inherit:
       - template: service-x-release
     values:
       - service:
           type: ClusterIP
+          ports:
+            - name: http
+              port: 82
+              targetPort: http
         extraObjects:
           ap:
             apiVersion: security.istio.io/v1beta1
