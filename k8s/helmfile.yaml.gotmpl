@@ -19,8 +19,8 @@ templates:
     needs:
       - istio-system/istiod
     values:
-      - ./services/default.yaml.gotmpl
-      - ./services/{{`{{ .Release.Name }}`}}.yaml.gotmpl
+      - ./services/default-values.yaml.gotmpl
+      - ./services/{{`{{ .Release.Name }}`}}-values.yaml.gotmpl
     # wait: true
     hooks:
       - events:
