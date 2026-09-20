@@ -1,0 +1,44 @@
+service:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 83
+      targetPort: http
+extraObjects:
+  ra:
+    apiVersion: security.istio.io/v1beta1
+    kind: RequestAuthentication
+    metadata:
+      name: service-3-jwt
+    spec:
+      jwtRules:
+        - issuer: https://desafio-devops.local
+          audiences:
+            - "{{`{{ .Release.Name }}`}}"
+          jwks: |
+            {{ readFile "../../jwt/jwks.json" | nindent 12 }}
+  ap:
+    apiVersion: security.istio.io/v1beta1
+    kind: AuthorizationPolicy
+    metadata:
+      name: service-3-requires-jwt
+    spec:
+      action: ALLOW
+      rules:
+        - when:
+            - key: request.auth.principal
+              values:
+                - "*"
+  deny-from-service-1-2:
+    apiVersion: security.istio.io/v1beta1
+    kind: AuthorizationPolicy
+    metadata:
+      name: deny-service-1-and-service-2
+    spec:
+      action: DENY
+      rules:
+        - from:
+            - source:
+                namespaces:
+                  - service-1
+                  - service-2

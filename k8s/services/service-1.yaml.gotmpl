@@ -1,0 +1,60 @@
+service:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 81
+      targetPort: http
+# deployment:
+#   image:
+#     repository: nginx:stable-alpine
+extraObjects:
+  ra:
+    apiVersion: security.istio.io/v1beta1
+    kind: RequestAuthentication
+    metadata:
+      name: service-1-jwt
+    spec:
+      jwtRules:
+        - issuer: https://desafio-devops.local
+          audiences:
+            - "{{`{{ .Release.Name }}`}}"
+          jwks: |
+            {{ readFile "../../jwt/jwks.json" | nindent 12 }}
+  ap:
+    apiVersion: security.istio.io/v1beta1
+    kind: AuthorizationPolicy
+    metadata:
+      name: service-1-requires-jwt
+    spec:
+      action: ALLOW
+      rules:
+        - when:
+            - key: request.auth.principal
+              values:
+                - "*"
+  dr-service-2:
+    apiVersion: networking.istio.io/v1beta1
+    kind: DestinationRule
+    metadata:
+      name: service-2-mtls
+    spec:
+      host: service-2.service-2.svc.cluster.local
+      trafficPolicy:
+        tls:
+          mode: ISTIO_MUTUAL
+  vs-service-2:
+    apiVersion: networking.istio.io/v1beta1
+    kind: VirtualService
+    metadata:
+      name: service-2-route
+    spec:
+      hosts:
+        - service-2.service-2.svc.cluster.local
+      gateways:
+        - mesh
+      http:
+        - route:
+            - destination:
+                host: service-2.service-2.svc.cluster.local
+                port:
+                  number: 82

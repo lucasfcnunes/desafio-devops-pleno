@@ -1,0 +1,19 @@
+service:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 82
+      targetPort: http
+extraObjects:
+  ap:
+    apiVersion: security.istio.io/v1beta1
+    kind: AuthorizationPolicy
+    metadata:
+      name: service-2-only-from-service-1
+    spec:
+      action: ALLOW
+      rules:
+        - from:
+            - source:
+                principals:
+                  - cluster.local/ns/service-1/sa/service-1
