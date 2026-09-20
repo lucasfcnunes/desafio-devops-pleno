@@ -11,3 +11,8 @@ devenv.local.yaml
 
 # vagrant
 .vagrant
+
+# decrypted files
+*.dec
+*.dec.*
+.decrypted~*

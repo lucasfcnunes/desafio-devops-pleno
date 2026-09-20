@@ -1,0 +1,179 @@
+repositories:
+  - name: istio
+    url: https://istio-release.storage.googleapis.com/charts
+  - name: bedag
+    url: https://bedag.github.io/helm-charts
+  - name: stakater
+    url: ghcr.io/stakater/charts
+    oci: true
+---
+templates:
+  samples:
+    values:
+      jwt-rule: &jwt-rule
+        issuer: https://desafio-devops.local
+        audiences:
+          - "{{`{{ .Release.Name }}`}}"
+        jwks: |
+          {{ readFile "./jwt/jwks.json" | nindent 20 }}
+  service-x-release: &service-release
+    chart: stakater/application
+    name: service-x
+    namespace: "{{`{{ .Release.Name }}`}}"
+    # installed: false
+    values:
+      - deployment:
+          image:
+            repository: mendhak/http-https-echo
+          automountServiceAccountToken: true
+        rbac:
+          enabled: true
+          serviceAccount:
+            create: true
+            name: "{{`{{ .Release.Name }}`}}"
+        extraObjects:
+          ns:
+            apiVersion: v1
+            kind: Namespace
+            metadata:
+              name: "{{`{{ .Release.Namespace }}`}}"
+              annotations:
+                helm.sh/resource-policy: keep
+              labels:
+                istio-injection: enabled
+          peer-authn-strict:
+            apiVersion: security.istio.io/v1beta1
+            kind: PeerAuthentication
+            metadata:
+              name: default
+            spec:
+              mtls:
+                mode: STRICT
+releases:
+  - name: istio-base
+    chart: istio/base
+    namespace: istio-system
+  - name: istiod
+    chart: istio/istiod
+    namespace: istio-system
+    needs:
+      - istio-system/istio-base
+    values:
+      - profile: sidecar
+  - name: service-1
+    labels:
+      deployment: yaml
+    inherit:
+      - template: service-x-release
+    values:
+      - service:
+          type: LoadBalancer
+        deployment:
+          image:
+            repository: nginx:stable-alpine
+        extraObjects:
+          ra:
+            apiVersion: security.istio.io/v1beta1
+            kind: RequestAuthentication
+            metadata:
+              name: service-1-jwt
+            spec:
+              jwtRules:
+                - <<: *jwt-rule
+          ap:
+            apiVersion: security.istio.io/v1beta1
+            kind: AuthorizationPolicy
+            metadata:
+              name: service-1-requires-jwt
+            spec:
+              action: ALLOW
+              rules:
+                - when:
+                    - key: request.auth.principal
+                      values:
+                        - "*"
+          dr-service-2:
+            apiVersion: networking.istio.io/v1beta1
+            kind: DestinationRule
+            metadata:
+              name: service-2-mtls
+            spec:
+              host: service-2.service-2.svc.cluster.local
+              trafficPolicy:
+                tls:
+                  mode: ISTIO_MUTUAL
+          vs-service-2:
+            apiVersion: networking.istio.io/v1beta1
+            kind: VirtualService
+            metadata:
+              name: service-2-route
+            spec:
+              hosts:
+                - service-2.service-2.svc.cluster.local
+              gateways:
+                - mesh
+              http:
+                - route:
+                    - destination:
+                        host: service-2.service-2.svc.cluster.local
+                        port:
+                          number: 80
+  - name: service-2
+    inherit:
+      - template: service-x-release
+    values:
+      - service:
+          type: ClusterIP
+        extraObjects:
+          ap:
+            apiVersion: security.istio.io/v1beta1
+            kind: AuthorizationPolicy
+            metadata:
+              name: service-2-only-from-service-1
+            spec:
+              action: ALLOW
+              rules:
+                - from:
+                    - source:
+                        principals:
+                          - cluster.local/ns/service-1/sa/service-1
+  - name: service-3
+    inherit:
+      - template: service-x-release
+    values:
+      - service:
+          type: LoadBalancer
+        extraObjects:
+          ra:
+            apiVersion: security.istio.io/v1beta1
+            kind: RequestAuthentication
+            metadata:
+              name: service-3-jwt
+            spec:
+              jwtRules:
+                - <<: *jwt-rule
+          ap:
+            apiVersion: security.istio.io/v1beta1
+            kind: AuthorizationPolicy
+            metadata:
+              name: service-3-requires-jwt
+            spec:
+              action: ALLOW
+              rules:
+                - when:
+                    - key: request.auth.principal
+                      values:
+                        - "*"
+          deny-from-service-1-2:
+            apiVersion: security.istio.io/v1beta1
+            kind: AuthorizationPolicy
+            metadata:
+              name: deny-service-1-and-service-2
+            spec:
+              action: DENY
+              rules:
+                - from:
+                    - source:
+                        namespaces:
+                          - service-1
+                          - service-2

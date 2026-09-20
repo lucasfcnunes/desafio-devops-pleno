@@ -1,0 +1,13 @@
+{
+  "keys": [
+    {
+      "use": "sig",
+      "kty": "EC",
+      "kid": "desafio-devops-es256-1",
+      "crv": "P-256",
+      "alg": "ES256",
+      "x": "RFROKpuJWkRhhw0dLVcX1ZHojewZbVqwQB3SFULpCfU",
+      "y": "A4sEmX6jH9yw-3tN4nZlCrZVQ7qiw2wYIpwJlcynYPU"
+    }
+  ]
+}

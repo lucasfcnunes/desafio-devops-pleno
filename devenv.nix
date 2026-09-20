@@ -14,47 +14,55 @@
   # process.managers.process-compose.enable = true;
 
   # https://devenv.sh/packages/
-  packages = let
-    my-kubernetes-helm = with pkgs; wrapHelm kubernetes-helm {
-      plugins = with pkgs.kubernetes-helmPlugins; [
-        helm-secrets
-        helm-diff
-        helm-s3
-        helm-git
-      ];
-    };
-    my-helmfile = pkgs.helmfile-wrapped.override {
-      inherit (my-kubernetes-helm) pluginsDir;
-    };
-    my-vagrant = (pkgs.vagrant.overrideAttrs (oldAttrs: {
-      doInstallCheck = false;
-      postInstall = oldAttrs.postInstall + ''
-        echo '{"version":"1","installed":{}}' > "$out/vagrant-plugins/plugins.json"
-        # TODO: https://github.com/NixOS/nixpkgs/issues/348108
-        # wrapProgram "$out/bin/vagrant" \
-        # --set-default VAGRANT_LIBVIRT_URI $\{config.env.VAGRANT_LIBVIRT_URI} \
-        # --set VAGRANT_WSL_ENABLE_WINDOWS_ACCESS 1 \
-        # --prefix PATH ':' "/mnt/c/Windows/system32/"
-      '';
-    }));
-  in
-  [
-    pkgs.sops
-    pkgs.ansible
-    pkgs.go-task
-    pkgs.yq-go
-    pkgs.kubectl
-    my-kubernetes-helm
-    my-helmfile
-    # pkgs.libvirt
-    # pkgs.qemu_kvm
-    # pkgs.virt-manager
-    # pkgs.cdrtools
-    # pkgs.virtualbox
-    pkgs.git
-    # pkgs.vagrant
-    my-vagrant
-  ];
+  packages =
+    let
+      my-kubernetes-helm =
+        with pkgs;
+        wrapHelm kubernetes-helm {
+          plugins = with pkgs.kubernetes-helmPlugins; [
+            helm-secrets
+            helm-diff
+            helm-s3
+            helm-git
+            helm-unittest
+          ];
+        };
+      my-helmfile = pkgs.helmfile-wrapped.override {
+        inherit (my-kubernetes-helm) pluginsDir;
+      };
+      my-vagrant = (
+        pkgs.vagrant.overrideAttrs (oldAttrs: {
+          doInstallCheck = false;
+          postInstall = oldAttrs.postInstall + ''
+            echo '{"version":"1","installed":{}}' > "$out/vagrant-plugins/plugins.json"
+            # TODO: https://github.com/NixOS/nixpkgs/issues/348108
+            # wrapProgram "$out/bin/vagrant" \
+            # --set-default VAGRANT_LIBVIRT_URI $\{config.env.VAGRANT_LIBVIRT_URI} \
+            # --set VAGRANT_WSL_ENABLE_WINDOWS_ACCESS 1 \
+            # --prefix PATH ':' "/mnt/c/Windows/system32/"
+          '';
+        })
+      );
+    in
+    [
+      pkgs.step-cli
+      pkgs.ripgrep
+      pkgs.sops
+      pkgs.ansible
+      pkgs.go-task
+      pkgs.yq-go
+      pkgs.kubectl
+      my-kubernetes-helm
+      my-helmfile
+      # pkgs.libvirt
+      # pkgs.qemu_kvm
+      # pkgs.virt-manager
+      # pkgs.cdrtools
+      # pkgs.virtualbox
+      pkgs.git
+      # pkgs.vagrant
+      my-vagrant
+    ];
 
   # processes = {
   #   # Run virtqemud (modular daemon) isolated inside .devenv state directory
@@ -174,4 +182,32 @@
   # git-hooks.hooks.shellcheck.enable = true;
 
   # See full reference at https://devenv.sh/reference/options/
+  cachix.pull = [
+    "lucasfcnunes"
+  ];
+  git-hooks.hooks = {
+    treefmt.enable = true;
+  };
+  treefmt = {
+    enable = true;
+    config.programs = {
+      nixfmt.enable = true;
+      actionlint.enable = true;
+      prettier.enable = true;
+      # prettier.settings = {
+      #   plugins = [
+      #     pkgs.prettier-plugin-ruby # "@prettier/plugin-ruby"
+      #   ];
+      #   overrides = [
+      #     {
+      #       files = [
+      #         "Vagrantfile"
+      #         "*.rb"
+      #       ];
+      #       options.parser = "ruby";
+      #     }
+      #   ];
+      # };
+    };
+  };
 }

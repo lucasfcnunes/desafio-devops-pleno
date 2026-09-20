@@ -1,7 +1,8 @@
-version: '3'
+version: "3"
 tasks:
   ansible:setup:
-    source: ./ansible/requirements.yaml
+    sources:
+      - ./ansible/requirements.yaml
     cmds:
       - ansible-galaxy install -r ./requirements.yaml
   vagrant:down:
@@ -16,7 +17,7 @@ tasks:
       - vagrant up {{.CLI_ARGS}}
   kubeconfig:cp:
     vars:
-      SERVER_CMD: 'vagrant ssh server-0 -- '
+      SERVER_CMD: "vagrant ssh server-0 -- "
       SERVER:
         sh: echo "https://$({{.SERVER_CMD}} hostname -i):6443"
     cmds:
@@ -25,3 +26,42 @@ tasks:
         {{.SERVER_CMD}} sudo cat /etc/rancher/k3s/k3s.yaml
         | yq '.clusters[0].cluster.server = "{{.SERVER}}"'
         > ~/.kube/k3s.yaml
+  jwk:setup:
+    dir: ./jwt/
+    cmds:
+      - |
+        step crypto jwk create \
+        ./public.jwk \
+        ./private.dec.jwk \
+        --kty EC \
+        --crv P-256 \
+        --alg ES256 \
+        --use sig \
+        --kid desafio-devops-es256-1 \
+        --no-password \
+        --insecure
+      - cmd: sops encrypt --filename-override ./private.enc.jwk --output ./private.enc.jwk ./private.dec.jwk
+        ignore_error: true
+      - yq -o=json -n '.keys = [load("./public.jwk")]' > ./jwks.json
+      - yq -P ./jwks.json
+  jwt:gen:
+    dir: ./jwt/
+    vars:
+      AUDS: >-
+        {{.AUDS | default "service-1"}}
+    cmds:
+      - |
+        step crypto jwt sign \
+        --key ./private.dec.jwk \
+        --alg ES256 \
+        --kid desafio-devops-es256-1 \
+        --iss https://desafio-devops.local \
+        --sub demo-user \
+        {{if .AUDS}}--aud {{.AUDS}}{{end}} \
+        --exp "$(date -u -d '+365 days' +%s)" \
+        > ./token.dec.jwt
+      - |
+        cat ./token.dec.jwt | step crypto jwt verify \
+        --jwks ./jwks.json \
+        --iss https://desafio-devops.local \
+        --aud service-1
