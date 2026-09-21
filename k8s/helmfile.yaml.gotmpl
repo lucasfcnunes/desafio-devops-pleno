@@ -10,6 +10,8 @@ repositories:
     url: https://kedacore.github.io/charts
   # - name: bedag
   #   url: https://bedag.github.io/helm-charts
+  - name: cert-manager
+    url: https://charts.jetstack.io
   - name: stakater
     url: ghcr.io/stakater/charts
     oci: true
@@ -86,6 +88,23 @@ releases:
       - monitoring/kps
     values:
       - ./keda/values.yaml.gotmpl
+  - chart: cert-manager/cert-manager
+    name: cert-manager
+    namespace: cert-manager
+    labels:
+      crd: "true"
+      app: cert-manager
+    values:
+      - ./cert-manager/values.yaml.gotmpl
+  - chart: bedag/raw
+    name: cert-manager-extras
+    namespace: cert-manager
+    labels:
+      app: cert-manager
+    needs:
+      - cert-manager/cert-manager
+    values:
+      - ./cert-manager/extras-values.yaml.gotmpl
   - name: service-1
     labels:
       deployment: yaml

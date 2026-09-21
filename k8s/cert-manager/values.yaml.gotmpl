@@ -1,0 +1,22 @@
+crds:
+  enabled: true
+  keep: true
+global:
+  logLevel: 2
+enableCertificateOwnerRef: true
+ingressShim:
+  defaultIssuerName: default-issuer
+  defaultIssuerKind: ClusterIssuer
+  defaultIssuerGroup: cert-manager.io
+extraArgs:
+  - --logging-format=json
+startupapicheck:
+  extraArgs:
+    - -v
+    - --logging-format=json
+webhook:
+  extraArgs:
+    - --logging-format=json
+cainjector:
+  extraArgs:
+    - --logging-format=json

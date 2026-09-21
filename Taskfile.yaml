@@ -49,27 +49,49 @@ tasks:
         ignore_error: true
       - yq -o=json -n '.keys = [load("./public.jwk")]' > ./jwks.json
       - yq -P ./jwks.json
+  private.dec.jwk:
+    dir: ./fake-vault/jwt/
+    cmds:
+      - sops --decrypt --output ./private.dec.jwk ./private.enc.jwk
   jwt:gen:
     dir: ./fake-vault/jwt/
+    deps:
+      - task: private.dec.jwk
     vars:
+      ISS: >-
+        {{.ISS | default "https://desafio-devops.local"}}
       AUDS: >-
-        {{.AUDS | default "service-1"}}
+        {{.AUDS | default "service-1,service-2,service-3"}}
+      AUDS_FLAGS: >-
+        {{range $index, $aud := splitList "," .AUDS}}--aud {{$aud}} {{end}}
+      JWT_PAYLOAD: >-
+        {{.JWT_PAYLOAD | default "echo {}"}}
     cmds:
       - |
-        step crypto jwt sign \
+        {{.JWT_PAYLOAD}} \
+        | step crypto jwt sign \
         --key ./private.dec.jwk \
         --alg ES256 \
         --kid desafio-devops-es256-1 \
-        --iss https://desafio-devops.local \
+        --iss {{.ISS}} \
         --sub demo-user \
-        {{if .AUDS}}--aud {{.AUDS}}{{end}} \
-        --exp "$(date -u -d '+365 days' +%s)" \
-        > ./token.dec.jwt
-      - |
-        cat ./token.dec.jwt | step crypto jwt verify \
-        --jwks ./jwks.json \
-        --iss https://desafio-devops.local \
-        --aud service-1
+        {{.AUDS_FLAGS}} \
+        --exp "$(date -u -d '+1 days' +%s)" \
+        | tee ./token.dec.jwt
+      - cmd: |
+          cat ./token.dec.jwt | step crypto jwt verify \
+          --jwks ./jwks.json \
+          --iss {{.ISS}} \
+          {{.AUDS_FLAGS}} > /dev/null
+  tls-certs:cp:
+    dir: ./fake-vault/tls/
+    cmds:
+      - >-
+        find $DEVENV_STATE/mkcert -type f -iregex '.*\.pem$' ! -iregex '.*-key\.pem$' -print0
+        | xargs -0 -I {} bash -c 'cp "{}" ./$(basename "{}").crt'
+      - >-
+        find $DEVENV_STATE/mkcert -type f -iregex '.*-key\.pem$' -print0
+        | xargs -0 -I {} bash -c 'sops -e --filename-override .enc --output ./$(basename "{}").enc.key "{}"'
   helmfile:sync:
     dir: ./k8s/
     cmds:

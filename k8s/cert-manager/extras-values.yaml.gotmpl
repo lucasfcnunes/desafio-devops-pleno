@@ -1,0 +1,22 @@
+resources:
+    - 
+      apiVersion: cert-manager.io/v1
+      kind: ClusterIssuer
+      metadata:
+        name: default-issuer
+      spec:
+        ca:
+          secretName: ca
+    - 
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: ca
+      type: kubernetes.io/tls
+      stringData:
+        # TODO: inconsistent function relative paths... OPEN ISSUE
+        ca.crt: &ca-crt |
+          {{ readFile "../../fake-vault/tls/rootCA.pem.crt" | nindent 10 }}
+        tls.crt: *ca-crt
+        tls.key: |
+          {{ fetchSecretValue "ref+sops://../fake-vault/tls/rootCA-key.pem.enc.key" | nindent 10 }}

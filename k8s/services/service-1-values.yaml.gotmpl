@@ -22,18 +22,27 @@ extraObjects:
     spec:
       action: ALLOW
       rules:
-        - when:
-            - key: request.auth.principal
-              values:
-                - "*"
+        - from:
+            - source:
+                requestPrincipals:
+                  - "*"
   dr-service-2:
     apiVersion: networking.istio.io/v1beta1
     kind: DestinationRule
     metadata:
       name: service-2-mtls
     spec:
-      host: service-2.service-2
-      # host: service-2.service-2.svc.cluster.local
+      host: service-2.service-2.svc.cluster.local
+      trafficPolicy:
+        tls:
+          mode: ISTIO_MUTUAL
+  dr-service-1:
+    apiVersion: networking.istio.io/v1beta1
+    kind: DestinationRule
+    metadata:
+      name: service-1-mtls
+    spec:
+      host: service-1.service-1.svc.cluster.local
       trafficPolicy:
         tls:
           mode: ISTIO_MUTUAL
@@ -50,32 +59,54 @@ extraObjects:
             number: 80
             name: http
             protocol: HTTP
-          hosts:
-            - "*"
+          hosts: &hosts
+            - service-1.desafio-devops.local
+            - service-1.desafio-devops.lucasfcnunes.com
+          tls:
+            httpsRedirect: true
+        - port:
+            number: 443
+            name: https
+            protocol: HTTPS
+          hosts: *hosts
+          tls:
+            mode: SIMPLE
+            credentialName: &cert service-1-cert
+  cert-service-1:
+    apiVersion: cert-manager.io/v1
+    kind: Certificate
+    metadata:
+      name: *cert
+      namespace: istio-system
+    spec:
+      issuerRef:
+        name: default-issuer
+        kind: ClusterIssuer
+      secretName: *cert
+      dnsNames: *hosts
   vs-external-service-1:
     apiVersion: networking.istio.io/v1beta1
     kind: VirtualService
     metadata:
       name: service-1-external-route
     spec:
-      hosts:
-        - "*"
+      hosts: *hosts
       gateways:
         - service-1-gateway
       http:
         - match:
             - uri:
-                prefix: /service-1
+                prefix: /service-2
           route:
             - destination:
-                host: service-1
+                host: service-2.service-2.svc.cluster.local
                 port:
                   number: 80
         - match:
             - uri:
-                prefix: /service-2
+                prefix: /
           route:
             - destination:
-                host: service-2.service-2
+                host: service-1.service-1.svc.cluster.local
                 port:
                   number: 80

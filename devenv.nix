@@ -14,7 +14,8 @@
   # env.LIBVIRT_DEFAULT_URI = "qemu:///session";
   # env.VAGRANT_LIBVIRT_URI = config.env.LIBVIRT_DEFAULT_URI;
   # env.VAGRANT_DEFAULT_PROVIDER = "virtualbox";
-  # process.managers.process-compose.enable = true;
+  # process.manager.implementation = "process-compose";
+  # process.manager.implementation = "native";
   env.NODES_SUBNET = "192.168.56.0/24";
   env.STARTING_NODE_INDEX = "10";
   hosts =
@@ -26,10 +27,26 @@
       ];
     in
     {
-      "svc1.lucasfcnunes" = nodes_ip;
-      # "svc2.lucasfcnunes" = nodes_ip;
-      "svc3.lucasfcnunes" = nodes_ip;
+      "*.desafio-devops.local" = nodes_ip;
+      "service-1.desafio-devops.local" = nodes_ip;
+      # "service-2.desafio-devops.local" = nodes_ip;
+      "service-3.desafio-devops.local" = nodes_ip;
     };
+  certificates = [
+    "*.desafio-devops.local"
+    "service-1.desafio-devops.local"
+    # "service-2.desafio-devops.local"
+    "service-3.desafio-devops.local"
+  ];
+  # services.caddy = {
+  #   enable = true;
+  #   config = ''
+  #     *.desafio-devops.local {
+  #       tls ${config.env.DEVENV_STATE}/mkcert/*.desafio-devops.local*.pem ${config.env.DEVENV_STATE}/mkcert/*.desafio-devops.local*-key.pem
+  #       respond "Secure local environment operational."
+  #     }
+  #   '';
+  # };
   # https://devenv.sh/packages/
   packages =
     let
@@ -79,6 +96,12 @@
       my-vagrant
     ]
     ++ [
+      pkgs.hostctl
+      pkgs.mkcert
+      pkgs.nssTools # Required if using Firefox or Chrome NSS stores
+      pkgs.curl
+    ]
+    ++ [
       # TODO: make it work with qemu://session too (hard?)
       # pkgs.libvirt
       # pkgs.qemu_kvm
@@ -93,19 +116,22 @@
       pkgs.jjui
     ];
 
-  # processes = {
-  #   # Run virtqemud (modular daemon) isolated inside .devenv state directory
-  #   virtqemud = {
-  #     exec = ''
-  #       export XDG_RUNTIME_DIR="$DEVENV_RUNTIME"
-  #       export XDG_CONFIG_HOME="$DEVENV_STATE/config"
-  #       export XDG_DATA_HOME="$DEVENV_STATE/share"
+  processes = {
+    # Run virtqemud (modular daemon) isolated inside .devenv state directory
+    # virtqemud = {
+    #   exec = ''
+    #     export XDG_RUNTIME_DIR="$DEVENV_RUNTIME"
+    #     export XDG_CONFIG_HOME="$DEVENV_STATE/config"
+    #     export XDG_DATA_HOME="$DEVENV_STATE/share"
 
-  #       mkdir -p "$DEVENV_RUNTIME/libvirt" "$DEVENV_STATE/libvirt/images"
-  #       exec ${pkgs.libvirt}/bin/virtqemud
-  #     '';
-  #   };
-  # };
+    #     mkdir -p "$DEVENV_RUNTIME/libvirt" "$DEVENV_STATE/libvirt/images"
+    #     exec ${pkgs.libvirt}/bin/virtqemud
+    #   '';
+    # };
+    sleep = {
+      exec = "${pkgs.coreutils}/bin/sleep infinity";
+    };
+  };
   # https://devenv.sh/languages/
   # languages.rust.enable = true;
 
@@ -203,7 +229,6 @@
   # https://devenv.sh/tests/
   enterTest = ''
     echo "Running tests"
-    git --version | grep --color=auto "${pkgs.git.version}"
     test -w /dev/kvm && virsh capabilities | grep -i kvm
   '';
 

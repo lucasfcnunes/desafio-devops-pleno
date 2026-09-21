@@ -19,10 +19,20 @@ extraObjects:
     spec:
       action: ALLOW
       rules:
-        - when:
-            - key: request.auth.principal
-              values:
-                - "*"
+        - from:
+            - source:
+                requestPrincipals:
+                  - "*"
+  dr-service-3:
+    apiVersion: networking.istio.io/v1beta1
+    kind: DestinationRule
+    metadata:
+      name: service-3-mtls
+    spec:
+      host: service-3.service-3.svc.cluster.local
+      trafficPolicy:
+        tls:
+          mode: ISTIO_MUTUAL
   gw-service-3:
     apiVersion: networking.istio.io/v1beta1
     kind: Gateway
@@ -36,25 +46,45 @@ extraObjects:
             number: 80
             name: http
             protocol: HTTP
-          hosts:
-            - "*"
+          hosts: &hosts
+            - service-3.desafio-devops.local
+            - service-3.desafio-devops.lucasfcnunes.com
+        - port:
+            number: 443
+            name: https
+            protocol: HTTPS
+          hosts: *hosts
+          tls:
+            mode: SIMPLE
+            credentialName: &cert service-3-cert
+  cert-service-3:
+    apiVersion: cert-manager.io/v1
+    kind: Certificate
+    metadata:
+      name: *cert
+      namespace: istio-system
+    spec:
+      issuerRef:
+        name: default-issuer
+        kind: ClusterIssuer
+      secretName: *cert
+      dnsNames: *hosts
   vs-external-service-3:
     apiVersion: networking.istio.io/v1beta1
     kind: VirtualService
     metadata:
       name: service-3-external-route
     spec:
-      hosts:
-        - "*"
+      hosts: *hosts
       gateways:
         - service-3-gateway
       http:
         - match:
             - uri:
-                prefix: /service-3
+                prefix: /
           route:
             - destination:
-                host: service-3
+                host: service-3.service-3.svc.cluster.local
                 port:
                   number: 80
   deny-from-service-1-2:
