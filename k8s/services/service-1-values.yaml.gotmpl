@@ -1,9 +1,3 @@
-service:
-  type: LoadBalancer
-  ports:
-    - name: http
-      port: 81
-      targetPort: http
 # deployment:
 #   image:
 #     repository: nginx:stable-alpine
@@ -38,23 +32,50 @@ extraObjects:
     metadata:
       name: service-2-mtls
     spec:
-      host: service-2.service-2.svc.cluster.local
+      host: service-2.service-2
+      # host: service-2.service-2.svc.cluster.local
       trafficPolicy:
         tls:
           mode: ISTIO_MUTUAL
-  vs-service-2:
+  gw-service-1:
+    apiVersion: networking.istio.io/v1beta1
+    kind: Gateway
+    metadata:
+      name: service-1-gateway
+    spec:
+      selector:
+        istio: ingressgateway
+      servers:
+        - port:
+            number: 80
+            name: http
+            protocol: HTTP
+          hosts:
+            - "*"
+  vs-external-service-1:
     apiVersion: networking.istio.io/v1beta1
     kind: VirtualService
     metadata:
-      name: service-2-route
+      name: service-1-external-route
     spec:
       hosts:
-        - service-2.service-2.svc.cluster.local
+        - "*"
       gateways:
-        - mesh
+        - service-1-gateway
       http:
-        - route:
+        - match:
+            - uri:
+                prefix: /service-1
+          route:
             - destination:
-                host: service-2.service-2.svc.cluster.local
+                host: service-1
                 port:
-                  number: 82
+                  number: 80
+        - match:
+            - uri:
+                prefix: /service-2
+          route:
+            - destination:
+                host: service-2.service-2
+                port:
+                  number: 80

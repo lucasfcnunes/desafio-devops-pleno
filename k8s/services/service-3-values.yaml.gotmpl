@@ -1,9 +1,3 @@
-service:
-  type: LoadBalancer
-  ports:
-    - name: http
-      port: 83
-      targetPort: http
 extraObjects:
   ra:
     apiVersion: security.istio.io/v1beta1
@@ -29,6 +23,40 @@ extraObjects:
             - key: request.auth.principal
               values:
                 - "*"
+  gw-service-3:
+    apiVersion: networking.istio.io/v1beta1
+    kind: Gateway
+    metadata:
+      name: service-3-gateway
+    spec:
+      selector:
+        istio: ingressgateway
+      servers:
+        - port:
+            number: 80
+            name: http
+            protocol: HTTP
+          hosts:
+            - "*"
+  vs-external-service-3:
+    apiVersion: networking.istio.io/v1beta1
+    kind: VirtualService
+    metadata:
+      name: service-3-external-route
+    spec:
+      hosts:
+        - "*"
+      gateways:
+        - service-3-gateway
+      http:
+        - match:
+            - uri:
+                prefix: /service-3
+          route:
+            - destination:
+                host: service-3
+                port:
+                  number: 80
   deny-from-service-1-2:
     apiVersion: security.istio.io/v1beta1
     kind: AuthorizationPolicy

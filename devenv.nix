@@ -15,7 +15,21 @@
   # env.VAGRANT_LIBVIRT_URI = config.env.LIBVIRT_DEFAULT_URI;
   # env.VAGRANT_DEFAULT_PROVIDER = "virtualbox";
   # process.managers.process-compose.enable = true;
-
+  env.NODES_SUBNET = "192.168.56.0/24";
+  env.STARTING_NODE_INDEX = "10";
+  hosts =
+    let
+      nodes_ip = [
+        "192.168.56.10"
+        "192.168.56.11"
+        "192.168.56.12"
+      ];
+    in
+    {
+      "svc1.lucasfcnunes" = nodes_ip;
+      # "svc2.lucasfcnunes" = nodes_ip;
+      "svc3.lucasfcnunes" = nodes_ip;
+    };
   # https://devenv.sh/packages/
   packages =
     let
