@@ -1,4 +1,9 @@
 collections:
-  - name: https://github.com/k3s-io/k3s-ansible.git
-    type: git
-    version: 1.4.0
+  - name: k3s.orchestration
+    # >>> git way
+    # src: https://github.com/k3s-io/k3s-ansible
+    src: https://github.com/lucasfcnunes/k3s-ansible
+    version: 1.2.2:main:165062c410ab8bd194a815d2cbd76f6d83755fd1 # 1.2.2
+    # >>> galaxy way (random guy mirror, better idempotency)
+    # src: mattykay.k3s_ansible
+    # version: 1.4.0

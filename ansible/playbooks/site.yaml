@@ -1,2 +1,14 @@
+# - name: Ensure galaxy dependencies are satisfied declaratively
+#   hosts: all
+#   # connection: local
+#   gather_facts: false
+#   tasks:
+#     - name: Ensure collections and roles from requirements file are installed
+#       ansible.builtin.command:
+#         cmd: ansible-galaxy install -r ../requirements.yaml
+#       delegate_to: localhost
+#       run_once: true
+#       register: galaxy_install
+#       changed_when: "'Downloading' in galaxy_install.stdout or 'Installing' in galaxy_install.stdout"
 - name: Import kube cluster playbook
   ansible.builtin.import_playbook: k3s.orchestration.site

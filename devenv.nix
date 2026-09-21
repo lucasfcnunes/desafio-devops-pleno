@@ -51,7 +51,6 @@
       pkgs.istioctl
       pkgs.k6
       pkgs.step-cli
-      pkgs.ripgrep
       pkgs.sops
       pkgs.ansible
       pkgs.go-task
@@ -60,15 +59,23 @@
       my-kubernetes-helm
       my-helmfile
       pkgs.dyff
-      pkgs.k9s
+      pkgs.git
+      # pkgs.vagrant
+      my-vagrant
+    ]
+    ++ [
+      # TODO: make it work with qemu://session too (hard?)
       # pkgs.libvirt
       # pkgs.qemu_kvm
       # pkgs.virt-manager
       # pkgs.cdrtools
       # pkgs.virtualbox
-      pkgs.git
-      # pkgs.vagrant
-      my-vagrant
+    ]
+    ++ [
+      pkgs.ripgrep
+      pkgs.k9s
+      pkgs.jujutsu
+      pkgs.jjui
     ];
 
   # processes = {

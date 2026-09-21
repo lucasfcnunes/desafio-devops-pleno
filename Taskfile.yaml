@@ -1,18 +1,18 @@
 version: "3"
 tasks:
-  ansible:setup:
-    sources:
-      - ./ansible/requirements.yaml
+  ansible:requirements-setup:
+    dir: ./ansible/
     cmds:
       - ansible-galaxy install -r ./requirements.yaml
   vagrant:down:
-    dir: ./ansible/k3s-ansible/
+    aliases:
+      - down
     cmds:
       - vagrant destroy -f {{.CLI_ARGS}}
   vagrant:up:
-    dir: ./ansible/k3s-ansible/
+    # TODO: this breaks my SSH connection when machines are being created the first time (host1 -(x)> host2 -> vagrant)
     deps:
-      - ansible:setup
+      - ansible:requirements-setup
     cmds:
       - vagrant up {{.CLI_ARGS}}
   kubeconfig:cp:
@@ -65,3 +65,29 @@ tasks:
         --jwks ./jwks.json \
         --iss https://desafio-devops.local \
         --aud service-1
+  helmfile:sync:
+    dir: ./k8s/
+    cmds:
+      - helmfile repos
+      - helmfile --skip-deps -l crd=true sync
+      - helmfile --skip-deps -l crd!=true apply
+  cluster:wait_until_ready:
+    vars:
+      SLEEP: "10"
+    cmds:
+      - cmd: >-
+          while 
+          kubectl get nodes -o yaml | yq '.items[] | select(.status.conditions[] | select(.type=="Ready") | .status!="True") | .metadata.name'
+          | grep -q .; do echo "⏳ Waiting for nodes to be Ready..."; sleep {{.SLEEP}};
+          done
+          && echo "✅ All nodes are Ready."
+  up:
+    cmds:
+      - task: vagrant:up
+        timeout: 5m
+      - task: kubeconfig:cp
+      - task: cluster:wait_until_ready
+        timeout: 90s
+      # - task: jwk:setup
+      - task: helmfile:sync
+      # - k6

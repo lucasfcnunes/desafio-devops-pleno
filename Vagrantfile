@@ -8,11 +8,12 @@ NODE_BOXES = ['bento/ubuntu-24.04', 'bento/ubuntu-24.04', 'bento/ubuntu-24.04']
 # NODE_CPUS = 2
 # NODE_MEMORY = 2048
 NODE_CPUS = 4
-NODE_MEMORY = 4096
+NODE_MEMORY = 8192
 # Virtualbox >= 6.1.28 require `/etc/vbox/network.conf` for expanded private networks 
-NODES_SUBNET = IPAddr.new("192.168.56.0/24")
+NODES_SUBNET = IPAddr.new(ENV['NODES_SUBNET'] || "192.168.56.0/24")
+STARTING_NODE_INDEX = ENV['STARTING_NODE_INDEX'] ? ENV['STARTING_NODE_INDEX'].to_i : 10
 def get_node_ip(node_num)
-  return (NODES_SUBNET.to_range.to_a[10 + node_num]).to_s
+  return (NODES_SUBNET.to_range.to_a[STARTING_NODE_INDEX + node_num]).to_s
 end
 SERVER_API_IP = get_node_ip(0)
 
