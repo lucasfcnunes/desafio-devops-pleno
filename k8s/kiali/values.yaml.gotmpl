@@ -5,9 +5,9 @@ cr:
     auth:
       strategy: anonymous
     external_services:
-      prometheus:
+      prometheus: 
         enabled: true
-        url: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
-      # grafana:
-      #   enabled: true
-      #   internal_url: http://prometheus-grafana.monitoring.svc.cluster.local:80
+        url: http://kps-prometheus.monitoring.svc.cluster.local:9090
+      grafana:
+        enabled: true
+        internal_url: http://kps-grafana.monitoring.svc.cluster.local:80

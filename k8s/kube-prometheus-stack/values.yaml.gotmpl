@@ -1,7 +1,11 @@
+fullnameOverride: kps
+nameOverride: kps
 alertmanager:
   enabled: false
 grafana:
-  enabled: false
+  # enabled: false
+  adminUser: admin
+  adminPassword: admin # TODO: use SOPS
 prometheus:
   prometheusSpec:
     additionalScrapeConfigs:

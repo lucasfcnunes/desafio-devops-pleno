@@ -6,6 +6,8 @@ repositories:
   - name: prometheus-community
     url: ghcr.io/prometheus-community/charts
     oci: true
+  - name: kedacore
+    url: https://kedacore.github.io/charts
   # - name: bedag
   #   url: https://bedag.github.io/helm-charts
   - name: stakater
@@ -24,6 +26,8 @@ templates:
       part-of: all-services
     needs:
       - istio-system/istio
+      - monitoring/kps
+      - monitoring/keda
     values:
       - ./services/default-values.yaml.gotmpl
       - ./services/{{`{{ .Release.Name }}`}}-values.yaml.gotmpl
@@ -63,7 +67,7 @@ releases:
     values:
       - ./kiali/values.yaml.gotmpl
   - chart: prometheus-community/kube-prometheus-stack
-    name: prometheus
+    name: kps
     namespace: monitoring
     labels:
       crd: "true"
@@ -72,6 +76,16 @@ releases:
       - istio-system/istio
     values:
       - ./kube-prometheus-stack/values.yaml.gotmpl
+  - chart: kedacore/keda
+    name: keda
+    namespace: monitoring
+    labels:
+      crd: "true"
+      app: keda
+    needs:
+      - monitoring/kps
+    values:
+      - ./keda/values.yaml.gotmpl
   - name: service-1
     labels:
       deployment: yaml
