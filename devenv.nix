@@ -48,6 +48,7 @@
       );
     in
     [
+      pkgs.istioctl
       pkgs.step-cli
       pkgs.ripgrep
       pkgs.sops
