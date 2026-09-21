@@ -52,6 +52,7 @@
       pkgs.k6
       pkgs.step-cli
       pkgs.sops
+      pkgs.age
       pkgs.ansible
       pkgs.go-task
       pkgs.yq-go

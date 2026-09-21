@@ -16,7 +16,7 @@ extraObjects:
           audiences:
             - "{{`{{ .Release.Name }}`}}"
           jwks: |
-            {{ readFile "../../jwt/jwks.json" | nindent 12 }}
+            {{ readFile "../../fake-vault/jwt/jwks.json" | nindent 12 }}
   ap:
     apiVersion: security.istio.io/v1beta1
     kind: AuthorizationPolicy

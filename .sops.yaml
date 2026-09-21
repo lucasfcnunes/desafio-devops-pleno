@@ -1,16 +1,14 @@
 keys:
   - &gpg-lucasfcnunes 51bbb719db9a3f8a928a4d5c9d76b9d8e1e20e99
   - &age-lucasfcnunes age1t4sll5asdrjdn902avqmqk60nmxmede7hrl92j8m7d5rtvu0cq4qmna6qv
-  # - &age-of-a-cool-person
+  - &fake-age-key age1449c5yz86myssegmxpdusyfhdxp9q8nxnd8dqgvg2ca87nq4r4tqsaxgyu
 creation_rules:
   - path_regex: (.*)(\.enc)(\.\w+)?
     key_groups:
       - # keys
         pgp:
           - *gpg-lucasfcnunes
-      # - # keys
-      #   age:
-      #     - *age-lucasfcnunes
-      # - # keys
-      #   age:
-      #   - *age-of-a-cool-person
+        age:
+          - *fake-age-key
+        # age:
+        #   - *age-lucasfcnunes

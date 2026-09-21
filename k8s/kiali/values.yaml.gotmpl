@@ -11,3 +11,10 @@ cr:
       grafana:
         enabled: true
         internal_url: http://kps-grafana.monitoring.svc.cluster.local:80
+        auth:
+          insecure_skip_verify: false
+          password: ref+sops://./secrets.enc.yaml#grafana/admin-password
+          # token: ""
+          type: "basic"
+          use_kiali_token: false
+          username: admin

@@ -5,7 +5,7 @@ alertmanager:
 grafana:
   # enabled: false
   adminUser: admin
-  adminPassword: admin # TODO: use SOPS
+  adminPassword: ref+sops://./secrets.enc.yaml#grafana/admin-password
 prometheus:
   prometheusSpec:
     additionalScrapeConfigs:

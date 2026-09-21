@@ -20,14 +20,19 @@ tasks:
       SERVER_CMD: "vagrant ssh server-0 -- "
       SERVER:
         sh: echo "https://$({{.SERVER_CMD}} hostname -i):6443"
+      KUBE_DIR:
+        sh: dirname $KUBECONFIG
+    dir: "{{.KUBE_DIR}}"
     cmds:
-      - mkdir -p ~/.kube/
       - >-
         {{.SERVER_CMD}} sudo cat /etc/rancher/k3s/k3s.yaml
         | yq '.clusters[0].cluster.server = "{{.SERVER}}"'
-        > ~/.kube/k3s.yaml
+        > $KUBECONFIG
+  age-key:gen:
+    cmds:
+      - age-keygen -o $SOPS_AGE_KEY_FILE
   jwk:setup:
-    dir: ./jwt/
+    dir: ./fake-vault/jwt/
     cmds:
       - |
         step crypto jwk create \
@@ -45,7 +50,7 @@ tasks:
       - yq -o=json -n '.keys = [load("./public.jwk")]' > ./jwks.json
       - yq -P ./jwks.json
   jwt:gen:
-    dir: ./jwt/
+    dir: ./fake-vault/jwt/
     vars:
       AUDS: >-
         {{.AUDS | default "service-1"}}
