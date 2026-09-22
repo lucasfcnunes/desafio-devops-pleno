@@ -19,6 +19,7 @@ repositories:
 templates:
   service-tmpl: &service-release
     chart: stakater/application
+    version: 9.3.1
     name: service-x
     namespace: "{{`{{ .Release.Name }}`}}"
     createNamespace: true
@@ -51,6 +52,7 @@ templates:
           - kubectl label --dry-run=client -o yaml --overwrite namespace {{`{{ .Release.Namespace }}`}} istio-injection=enabled | kubectl apply -f -
 releases:
   - chart: bedag/raw
+    version: 2.0.2
     name: istio
     namespace: istio-system
     labels:
@@ -59,6 +61,7 @@ releases:
     values:
       - ./istio/values.yaml.gotmpl
   - chart: kiali/kiali-operator
+    version: 2.32.0
     name: kiali-operator
     namespace: kiali-operator
     labels:
@@ -69,6 +72,7 @@ releases:
     values:
       - ./kiali/values.yaml.gotmpl
   - chart: prometheus-community/kube-prometheus-stack
+    version: 91.4.1
     name: kps
     namespace: monitoring
     labels:
@@ -79,6 +83,7 @@ releases:
     values:
       - ./kube-prometheus-stack/values.yaml.gotmpl
   - chart: kedacore/keda
+    version: 2.20.2
     name: keda
     namespace: monitoring
     labels:
@@ -89,6 +94,7 @@ releases:
     values:
       - ./keda/values.yaml.gotmpl
   - chart: cert-manager/cert-manager
+    version: 1.21.2
     name: cert-manager
     namespace: cert-manager
     labels:
@@ -97,6 +103,7 @@ releases:
     values:
       - ./cert-manager/values.yaml.gotmpl
   - chart: bedag/raw
+    version: 2.0.2
     name: cert-manager-extras
     namespace: cert-manager
     labels:
