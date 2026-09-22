@@ -128,3 +128,9 @@ tasks:
       - task: private.dec.jwk
     cmds:
       - k6 run ./test.js -i 1 --summary-mode full --http-debug=full --log-format json --quiet 2> >(yq -P -p json)
+  mtls:test:
+    dir: ./k8s/
+    env:
+      INSTALL_MISCELLANEOUS: "true"
+    cmds:
+      - helmfile -l installed=false apply

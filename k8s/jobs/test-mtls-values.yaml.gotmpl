@@ -1,0 +1,48 @@
+# TODO: finish this
+x-curl-loop: |
+  {{- define "curl-loop" -}}
+  echo "--- Sending requests with Istio Sidecar ---"
+  for svc in service-1.service-1 service-2.service-2 service-3.service-3; do
+    echo "Requesting ${svc}..."
+    curl -s -o /dev/null -w "%{http_code}\n" http://${svc} || true
+  done
+  {{- end -}}
+resources:
+  - &job
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: curl-job-with-sidecar
+    spec:
+      ttlSecondsAfterFinished: 0
+      template:
+        metadata:
+          annotations:
+            sidecar.istio.io/inject: "true"
+        spec:
+          restartPolicy: Never
+          containers:
+            - &container
+              name: curl
+              image: curlimages/curl:8.5.0
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  {{ include "curl-loop" . | fromYaml | nindent 22 }}
+                - |
+                  # Signal the Istio proxy to terminate so the batch job completes
+                  curl -fsI -X POST http://127.0.0.1:15020/quitquitquit || true
+  - <<: *job
+    metadata:
+      name: curl-job-without-sidecar
+    spec:
+      template:
+        metadata:
+          annotations:
+            sidecar.istio.io/inject: "false"
+        spec:
+          containers:
+            - <<: *container
+              args:
+                - |
+                  {{ include "curl-loop" . | fromYaml | nindent 22 }}

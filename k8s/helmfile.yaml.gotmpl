@@ -116,4 +116,17 @@ releases:
   - name: service-3
     inherit:
       - template: service-tmpl
-
+  - chart: bedag/raw
+    installed: !!bool '{{ env "INSTALL_MISCELLANEOUS" | default false }}'
+    name: miscellaneous
+    namespace: miscellaneous
+    labels:
+      app: miscellaneous
+      installed: "false"
+      test: "true"
+    needs:
+      - service-1/service-1
+      - service-2/service-2
+      - service-3/service-3
+    values:
+      - ./jobs/test-mtls-values.yaml.gotmpl
