@@ -37,7 +37,7 @@ def provision(vm, role, node_num)
   # vm.network "private_network", type: "dhcp"
   # vm.network "forwarded_port", guest: 6443, host: 1443 + node_num, host_ip: "0.0.0.0"
 
-  vm.synced_folder "./", "/vagrant", automount: false
+  vm.synced_folder ".", "/vagrant", disabled: true
 
   vm.provision "ansible", run: 'once' do |ansible|
     ansible.compatibility_mode = "2.0"
