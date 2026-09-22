@@ -51,6 +51,10 @@ tasks:
       - yq -P ./jwks.json
   private.dec.jwk:
     dir: ./fake-vault/jwt/
+    sources:
+      - ./private.enc.jwk
+    generates:
+      - ./private.dec.jwk
     cmds:
       - sops --decrypt --output ./private.dec.jwk ./private.enc.jwk
   jwt:gen:
@@ -120,5 +124,7 @@ tasks:
       # - k6
   k6:test:
     dir: ./k6/
+    deps:
+      - task: private.dec.jwk
     cmds:
       - k6 run ./test.js
