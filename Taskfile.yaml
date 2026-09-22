@@ -98,10 +98,18 @@ tasks:
         | xargs -0 -I {} bash -c 'sops -e --filename-override .enc --output ./$(basename "{}").enc.key "{}"'
   helmfile:sync:
     dir: ./k8s/
+    env:
+      # TODO: disable this and use yaml mode
+      INSTALL_SERVICE_1: "true"
     cmds:
       - helmfile repos
       - helmfile --skip-deps -l crd=true sync
       - helmfile --skip-deps -l crd!=true apply
+  kubectl:apply:yaml:
+    env:
+      INSTALL_SERVICE_1: "true"
+    cmds:
+      - helmfile -l installed=false template | kubectl apply -n service-1 -f -
   cluster:wait_until_ready:
     vars:
       SLEEP: "10"

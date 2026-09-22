@@ -16,6 +16,7 @@
   # env.VAGRANT_DEFAULT_PROVIDER = "virtualbox";
   # process.manager.implementation = "process-compose";
   # process.manager.implementation = "native";
+  env.INSTALL_SERVICE_1 = "true"; # ! comment this by default
   env.NODES_SUBNET = "192.168.56.0/24";
   env.STARTING_NODE_INDEX = "10";
   hosts =

@@ -106,8 +106,10 @@ releases:
     values:
       - ./cert-manager/extras-values.yaml.gotmpl
   - name: service-1
+    installed: !!bool '{{ env "INSTALL_SERVICE_1" | default false }}'
     labels:
       deployment: yaml
+      installed: "false"
     inherit:
       - template: service-tmpl
   - name: service-2
