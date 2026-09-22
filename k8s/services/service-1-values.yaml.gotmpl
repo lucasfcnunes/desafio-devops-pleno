@@ -96,7 +96,7 @@ extraObjects:
       http:
         - match:
             - uri:
-                prefix: /service-2
+                regex: ^/service-2(/.*)?
           route:
             - destination:
                 host: service-2.service-2.svc.cluster.local
@@ -104,7 +104,7 @@ extraObjects:
                   number: 80
         - match:
             - uri:
-                prefix: /
+                regex: ^/service-1(/.*)?
           route:
             - destination:
                 host: service-1.service-1.svc.cluster.local

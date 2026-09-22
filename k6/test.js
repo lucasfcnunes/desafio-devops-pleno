@@ -3,17 +3,17 @@ import { check, sleep } from "k6";
 import { generateJwtFromPrivateJwk } from "./jwt-utils.js";
 // TODO: setup to test http -> https redirects
 const SERVICE_1_BASE_URL =
-  __ENV.SERVICE_1_BASE_URL || __ENV.BASE_URL || "https://service-1.desafio-devops.local";
+  __ENV.SERVICE_1_BASE_URL ||
+  __ENV.BASE_URL ||
+  "https://service-1.desafio-devops.local";
 const SERVICE_3_BASE_URL =
   __ENV.SERVICE_3_BASE_URL || "https://service-3.desafio-devops.local";
 const PRIVATE_JWK_FILE =
   __ENV.PRIVATE_JWK_FILE || "../fake-vault/jwt/private.dec.jwk";
 const JWT_ISSUER = __ENV.JWT_ISSUER || "https://desafio-devops.local";
 const JWT_SUBJECT = __ENV.JWT_SUBJECT || "demo-user";
-const JWT_AUDIENCE_SERVICE_1 =
-  __ENV.JWT_AUDIENCE_SERVICE_1 || "service-1";
-const JWT_AUDIENCE_SERVICE_3 =
-  __ENV.JWT_AUDIENCE_SERVICE_3 || "service-3";
+const JWT_AUDIENCE_SERVICE_1 = __ENV.JWT_AUDIENCE_SERVICE_1 || "service-1";
+const JWT_AUDIENCE_SERVICE_3 = __ENV.JWT_AUDIENCE_SERVICE_3 || "service-3";
 const JWT_AUDIENCES = (__ENV.JWT_AUDIENCES || "service-1,service-3")
   .split(",")
   .map((aud) => aud.trim())
@@ -59,6 +59,7 @@ const INSECURE_SKIP_TLS_VERIFY =
 
 const SERVICE_1_URL = `${SERVICE_1_BASE_URL}/service-1`;
 const SERVICE_3_URL = `${SERVICE_3_BASE_URL}/service-3`;
+const SERVICE_2_ROUTE_ROOT_URL = `${SERVICE_1_BASE_URL}/service-2`;
 
 function requestOptions(token) {
   const headers = {};
@@ -83,7 +84,9 @@ export async function setup() {
     const privateJwk = PRIVATE_JWK;
 
     if (!privateJwk) {
-      throw new Error("PRIVATE_JWK is empty. Set PRIVATE_JWK or PRIVATE_JWK_FILE.");
+      throw new Error(
+        "PRIVATE_JWK is empty. Set PRIVATE_JWK or PRIVATE_JWK_FILE.",
+      );
     }
 
     if (!validJwt) {
@@ -117,7 +120,9 @@ export async function setup() {
   }
 
   if (INSECURE_SKIP_TLS_VERIFY) {
-    console.warn("INSECURE_SKIP_TLS_VERIFY=true. TLS certificate verification is disabled.");
+    console.warn(
+      "INSECURE_SKIP_TLS_VERIFY=true. TLS certificate verification is disabled.",
+    );
   }
   if (!FORBIDDEN_JWT) {
     console.warn(
@@ -179,6 +184,26 @@ export default function (data) {
     );
     check(swappedAudienceOnService1, {
       "service-1 with swapped audience token (aud=service-3) -> 403": (r) =>
+        r.status === 403,
+    });
+  }
+
+  const service2RootNoToken = http.get(
+    SERVICE_2_ROUTE_ROOT_URL,
+    requestOptions(),
+  );
+  check(service2RootNoToken, {
+    "service-1 domain route /service-2 without JWT -> 403": (r) =>
+      r.status === 403,
+  });
+
+  if (runtimeValidJwt) {
+    const service2RootValidToken = http.get(
+      SERVICE_2_ROUTE_ROOT_URL,
+      requestOptions(runtimeValidJwt),
+    );
+    check(service2RootValidToken, {
+      "service-1 domain route /service-2 with valid JWT -> 403": (r) =>
         r.status === 403,
     });
   }
