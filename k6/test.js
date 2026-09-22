@@ -3,9 +3,7 @@ import { check, sleep } from "k6";
 import { generateJwtFromPrivateJwk } from "./jwt-utils.js";
 // TODO: setup to test http -> https redirects
 const SERVICE_1_BASE_URL =
-  __ENV.SERVICE_1_BASE_URL ||
-  __ENV.BASE_URL ||
-  "https://service-1.desafio-devops.local";
+  __ENV.SERVICE_1_BASE_URL || "https://service-1.desafio-devops.local";
 const SERVICE_3_BASE_URL =
   __ENV.SERVICE_3_BASE_URL || "https://service-3.desafio-devops.local";
 const PRIVATE_JWK_FILE =
@@ -14,11 +12,10 @@ const JWT_ISSUER = __ENV.JWT_ISSUER || "https://desafio-devops.local";
 const JWT_SUBJECT = __ENV.JWT_SUBJECT || "demo-user";
 const JWT_AUDIENCE_SERVICE_1 = __ENV.JWT_AUDIENCE_SERVICE_1 || "service-1";
 const JWT_AUDIENCE_SERVICE_3 = __ENV.JWT_AUDIENCE_SERVICE_3 || "service-3";
-const JWT_AUDIENCES = (__ENV.JWT_AUDIENCES || "service-1,service-3")
-  .split(",")
-  .map((aud) => aud.trim())
-  .filter(Boolean);
-
+const JWT_AUDIENCES = __ENV.JWT_AUDIENCES || [
+  JWT_AUDIENCE_SERVICE_1,
+  JWT_AUDIENCE_SERVICE_3,
+];
 const VALID_JWT_FILE = __ENV.VALID_JWT_FILE || "";
 
 function getToken({ value, filePath }) {
@@ -58,8 +55,9 @@ const INSECURE_SKIP_TLS_VERIFY =
   (__ENV.INSECURE_SKIP_TLS_VERIFY || "true").toLowerCase() === "true";
 
 const SERVICE_1_URL = `${SERVICE_1_BASE_URL}/service-1`;
+const SERVICE_2_URL = `${SERVICE_1_BASE_URL}/service-2`;
 const SERVICE_3_URL = `${SERVICE_3_BASE_URL}/service-3`;
-const SERVICE_2_ROUTE_ROOT_URL = `${SERVICE_1_BASE_URL}/service-2`;
+const PATH_SUFFIXES = ["", "/service-1", "/service-2", "/service-3"];
 
 function requestOptions(token) {
   const headers = {};
@@ -67,6 +65,58 @@ function requestOptions(token) {
     headers.Authorization = `Bearer ${token}`;
   }
   return { headers };
+}
+
+function runJwtMatrixChecks({
+  label,
+  url,
+  validJwt,
+  forbiddenJwt,
+  invalidJwt,
+  swappedAudienceJwt,
+  validJwtExpectedStatus,
+}) {
+  const PAD_LENGTH = 40;
+  const noTokenResponse = http.get(url, requestOptions());
+  check(noTokenResponse, {
+    [`JWT(exists=N valid=x aud=x); ${label.padEnd(PAD_LENGTH, " ")}; -> 403`]: (
+      r,
+    ) => r.status === 403,
+  });
+
+  const invalidTokenResponse = http.get(url, requestOptions(invalidJwt));
+  check(invalidTokenResponse, {
+    [`JWT(exists=Y valid=N aud=x); ${label.padEnd(PAD_LENGTH, " ")}; -> 401`]: (
+      r,
+    ) => r.status === 401,
+  });
+
+  if (forbiddenJwt) {
+    const forbiddenTokenResponse = http.get(url, requestOptions(forbiddenJwt));
+    check(forbiddenTokenResponse, {
+      [`JWT(forbidden=Y); ${label.padEnd(PAD_LENGTH, " ")}; -> 403`]: (r) =>
+        r.status === 403,
+    });
+  }
+
+  if (validJwt) {
+    const validTokenResponse = http.get(url, requestOptions(validJwt));
+    check(validTokenResponse, {
+      [`JWT(exists=Y valid=Y aud=Y); ${label.padEnd(PAD_LENGTH, " ")}; -> ${validJwtExpectedStatus}`]:
+        (r) => r.status === validJwtExpectedStatus,
+    });
+  }
+
+  if (swappedAudienceJwt) {
+    const swappedAudienceResponse = http.get(
+      url,
+      requestOptions(swappedAudienceJwt),
+    );
+    check(swappedAudienceResponse, {
+      [`JWT(exists=Y valid=Y aud=N); ${label.padEnd(PAD_LENGTH, " ")}; -> 403`]:
+        (r) => r.status === 403,
+    });
+  }
 }
 
 export const options = {
@@ -144,112 +194,57 @@ export default function (data) {
   const service3AudienceJwt =
     data && data.service3AudienceJwt ? data.service3AudienceJwt : "";
 
-  const noTokenService1 = http.get(SERVICE_1_URL, requestOptions());
-  check(noTokenService1, {
-    "service-1 without JWT -> 403": (r) => r.status === 403,
-  });
+  const pathTestTargets = [
+    {
+      label: "GW=1->SVC=1",
+      serviceName: "service-1",
+      baseUrl: SERVICE_1_URL,
+      swappedAudienceJwt: service3AudienceJwt,
+    },
+    {
+      label: "GW=1->SVC=2",
+      serviceName: "service-2",
+      baseUrl: SERVICE_2_URL,
+      swappedAudienceJwt: service3AudienceJwt,
+    },
+    {
+      label: "GW=3->SVC=3",
+      serviceName: "service-3",
+      baseUrl: SERVICE_3_URL,
+      swappedAudienceJwt: service1AudienceJwt,
+    },
+    // {
+    //   label: "GW=1->SVC=1->SVC=2",
+    //   serviceName: "service-1-2",
+    //   baseUrl: `${SERVICE_1_URL}/service-2`,
+    //   swappedAudienceJwt: service3AudienceJwt,
+    // },
+  ];
 
-  const invalidTokenService1 = http.get(
-    SERVICE_1_URL,
-    requestOptions(INVALID_JWT),
-  );
-  check(invalidTokenService1, {
-    "service-1 with invalid JWT -> 401": (r) => r.status === 401,
-  });
+  for (const target of pathTestTargets) {
+    for (const pathSuffix of PATH_SUFFIXES) {
+      if (pathSuffix === `/${target.serviceName}`) {
+        continue;
+      }
 
-  if (FORBIDDEN_JWT) {
-    const forbiddenTokenService1 = http.get(
-      SERVICE_1_URL,
-      requestOptions(FORBIDDEN_JWT),
-    );
-    check(forbiddenTokenService1, {
-      "service-1 with forbidden JWT -> 403": (r) => r.status === 403,
-    });
-  }
+      const validJwtExpectedStatus =
+        (target.serviceName === "service-1" && pathSuffix === "/service-2") ||
+        (target.serviceName !== "service-2" && pathSuffix === "/")
+          ? 200
+          : 403;
 
-  if (runtimeValidJwt) {
-    const validTokenService1 = http.get(
-      SERVICE_1_URL,
-      requestOptions(runtimeValidJwt),
-    );
-    check(validTokenService1, {
-      "service-1 with valid JWT -> 200": (r) => r.status === 200,
-    });
-  }
+      // if (validJwtExpectedStatus !== 200) {continue}; // only OK!
 
-  if (service3AudienceJwt) {
-    const swappedAudienceOnService1 = http.get(
-      SERVICE_1_URL,
-      requestOptions(service3AudienceJwt),
-    );
-    check(swappedAudienceOnService1, {
-      "service-1 with swapped audience token (aud=service-3) -> 403": (r) =>
-        r.status === 403,
-    });
-  }
-
-  const service2RootNoToken = http.get(
-    SERVICE_2_ROUTE_ROOT_URL,
-    requestOptions(),
-  );
-  check(service2RootNoToken, {
-    "service-1 domain route /service-2 without JWT -> 403": (r) =>
-      r.status === 403,
-  });
-
-  if (runtimeValidJwt) {
-    const service2RootValidToken = http.get(
-      SERVICE_2_ROUTE_ROOT_URL,
-      requestOptions(runtimeValidJwt),
-    );
-    check(service2RootValidToken, {
-      "service-1 domain route /service-2 with valid JWT -> 403": (r) =>
-        r.status === 403,
-    });
-  }
-
-  const noTokenService3 = http.get(SERVICE_3_URL, requestOptions());
-  check(noTokenService3, {
-    "service-3 without JWT -> 403": (r) => r.status === 403,
-  });
-
-  const invalidTokenService3 = http.get(
-    SERVICE_3_URL,
-    requestOptions(INVALID_JWT),
-  );
-  check(invalidTokenService3, {
-    "service-3 with invalid JWT -> 401": (r) => r.status === 401,
-  });
-
-  if (FORBIDDEN_JWT) {
-    const forbiddenTokenService3 = http.get(
-      SERVICE_3_URL,
-      requestOptions(FORBIDDEN_JWT),
-    );
-    check(forbiddenTokenService3, {
-      "service-3 with forbidden JWT -> 403": (r) => r.status === 403,
-    });
-  }
-
-  if (runtimeValidJwt) {
-    const validTokenService3 = http.get(
-      SERVICE_3_URL,
-      requestOptions(runtimeValidJwt),
-    );
-    check(validTokenService3, {
-      "service-3 with valid JWT -> 200": (r) => r.status === 200,
-    });
-  }
-
-  if (service1AudienceJwt) {
-    const swappedAudienceOnService3 = http.get(
-      SERVICE_3_URL,
-      requestOptions(service1AudienceJwt),
-    );
-    check(swappedAudienceOnService3, {
-      "service-3 with swapped audience token (aud=service-1) -> 403": (r) =>
-        r.status === 403,
-    });
+      runJwtMatrixChecks({
+        label: `${target.label} path=${pathSuffix}`,
+        url: `${target.baseUrl}${pathSuffix}`,
+        validJwt: runtimeValidJwt,
+        forbiddenJwt: FORBIDDEN_JWT,
+        invalidJwt: INVALID_JWT,
+        swappedAudienceJwt: target.swappedAudienceJwt,
+        validJwtExpectedStatus,
+      });
+    }
   }
 
   sleep(1);

@@ -11,6 +11,10 @@ spec:
   meshConfig:
     accessLogFile: /dev/stdout
     enableTracing: true
+    # enableAutoMtls: true
+    pathNormalization:
+      normalizationType: RFC_3986
+      mergeSlashes: true
   components:
     base:
       enabled: true
@@ -26,6 +30,7 @@ spec:
           #   cpu: 1000m
           #   memory: 1024Mi
     cni:
+      # TODO: enable cni to avoid NET_(ADMIN|RAW) and future ambient mode
       enabled: false
     ztunnel:
       enabled: false

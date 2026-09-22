@@ -15,24 +15,31 @@ extraObjects:
     apiVersion: security.istio.io/v1beta1
     kind: AuthorizationPolicy
     metadata:
-      name: service-3-requires-jwt
+      name: service-3-only-gateway
     spec:
       action: ALLOW
       rules:
         - from:
-            - source:
-                requestPrincipals:
-                  - "*"
-  dr-service-3:
-    apiVersion: networking.istio.io/v1beta1
-    kind: DestinationRule
-    metadata:
-      name: service-3-mtls
-    spec:
-      host: service-3.service-3.svc.cluster.local
-      trafficPolicy:
-        tls:
-          mode: ISTIO_MUTUAL
+          - source:
+              principals:
+                - cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account
+          when:
+            - key: request.auth.principal
+              values:
+                - "*"
+  # deny-from-service-1-2:
+  #   apiVersion: security.istio.io/v1beta1
+  #   kind: AuthorizationPolicy
+  #   metadata:
+  #     name: deny-service-1-and-service-2
+  #   spec:
+  #     action: DENY
+  #     rules:
+  #       - from:
+  #           - source:
+  #               namespaces:
+  #                 - service-1
+  #                 - service-2
   gw-service-3:
     apiVersion: networking.istio.io/v1beta1
     kind: Gateway
@@ -79,24 +86,15 @@ extraObjects:
       gateways:
         - service-3-gateway
       http:
-        - match:
-            - uri:
-                regex: ^/service-3(/.*)?
-          route:
+        - route:
             - destination:
                 host: service-3.service-3.svc.cluster.local
                 port:
                   number: 80
-  deny-from-service-1-2:
-    apiVersion: security.istio.io/v1beta1
-    kind: AuthorizationPolicy
-    metadata:
-      name: deny-service-1-and-service-2
-    spec:
-      action: DENY
-      rules:
-        - from:
-            - source:
-                namespaces:
-                  - service-1
-                  - service-2
+          match:
+            - uri:
+                regex: &rs3 /service-3(/|$)(.*)
+          rewrite:
+            uriRegexRewrite:
+              match: *rs3
+              rewrite: /\2

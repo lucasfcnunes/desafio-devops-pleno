@@ -1,0 +1,7 @@
+# docker compose build --push
+services:
+  wiremock:
+    build:
+      dockerfile_inline: |
+        FROM dhi.io/wiremock:3.13
+    image: docker.io/dhi-wiremock:3.13

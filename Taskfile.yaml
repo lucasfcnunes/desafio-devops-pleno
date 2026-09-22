@@ -125,8 +125,9 @@ tasks:
       - task: vagrant:up
         timeout: 5m
       - task: kubeconfig:cp
+      # - cd ./k8s/ && helmfile -l app=istio sync # INFO: missing istio may hang the cluster
       - task: cluster:wait_until_ready
-        timeout: 90s
+        timeout: 30s
       # - task: jwk:setup
       - task: helmfile:sync
       # - k6

@@ -1,16 +1,63 @@
 deployment:
+  # image:
+  #   repository: mendhak/http-https-echo:42
+  # env:
+  #   HTTP_PORT:
+  #     value: "3000"
+  #   # HTTPS_PORT:
+  #   #   value: '3443'
+  #   JWT_HEADER:
+  #     value: Authorization
+  #   # COOKIE_SECRET:
+  #   #   value: "secret"
+  #   MTLS_ENABLE:
+  #     value: "1"
+  #   PROMETHEUS_ENABLED:
+  #     value: "true"
+  #   PROMETHEUS_WITH_PATH:
+  #     value: "true"
   image:
-    repository: mendhak/http-https-echo:42
-  env:
-    HTTP_PORT:
-      value: "3000"
-    # HTTPS_PORT:
-    #   value: '3443'
+    repository: wiremock/wiremock:3.13.2 # ! original runs as root
+    # repository: dhi.io/wiremock:3
+  containerSecurityContext:
+    runAsNonRoot: false
+    readOnlyRootFilesystem: false
+  args:
+    - --port=3000
+    # - --max-request-journal=1000
+    # - --local-response-templating
+    - --global-response-templating
+    - --root-dir=/home/wiremock/storage
+    - --permitted-system-keys=.*
+    - --disable-gzip
+    - --verbose
+  # env:
   ports:
     - name: http
       containerPort: 3000
       protocol: TCP
   automountServiceAccountToken: true
+  volumeMounts:
+    # - mountPath: /home/wiremock/storage/mappings
+    #   name: mappings-data
+    mappings-data:
+      mountPath: /home/wiremock/storage/mappings
+  volumes:
+    mappings-data:
+      configMap:
+        name: '{{`{{ .Release.Name }}`}}-mappings-data'
+configMap:
+  enabled: true
+  files:
+    mappings-data:
+      # INFO: this here deals with >=1~2 passes gotmpl
+      mappings.json: |
+        {{ exec "yq" (list "-o=json" "./wiremock/mappings.yaml") 
+          | replace "{{" "___LBRACE___" 
+          | replace "}}" "___RBRACE___" 
+          | replace "___LBRACE___" (printf "{{ `%s` }}" `{{`) 
+          | replace "___RBRACE___" (printf "{{ `%s` }}" `}}`) 
+          | nindent 8 }}
 service:
   type: ClusterIP
   ports:

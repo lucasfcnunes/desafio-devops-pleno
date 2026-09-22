@@ -11,3 +11,7 @@ extraObjects:
             - source:
                 principals:
                   - cluster.local/ns/service-1/sa/service-1
+          when:
+            - key: request.auth.principal
+              values:
+                - "*"

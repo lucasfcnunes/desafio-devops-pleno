@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/wiremock/wiremock/refs/heads/master/schemas/wiremock-stub-mapping-or-mappings.json
+mappings:
+  - priority: 1
+    request:
+      urlPathPattern: /(service-\d+)(/|$)(.*)
+    response:
+      proxyBaseUrl: http://{{request.pathSegments.[0]}}.{{request.pathSegments.[0]}}.svc.cluster.local
+      proxyUrlPrefixToRemove: /{{request.pathSegments.[0]}}
+  - priority: 10
+    request:
+      urlPathPattern: .*
+    response:
+      status: 200
+      body: |
+        {
+          "wiremock": {
+            "serverTime": "{{now format='yyyy-MM-dd HH:mm:ssZ'}}",
+            "epoch": {{now format='epoch'}},
+            "hostname": "{{systemValue type='ENVIRONMENT' key='HOSTNAME'}}",
+            "javaVersion": "{{systemValue type='PROPERTY' key='java.version'}}"
+          },
+          "request": {
+            "method": "{{request.method}}",
+            "url": "{{request.url}}",
+            "protocol": "{{request.protocol}}",
+            "clientIp": "{{request.clientIp}}",
+            "headers": {{{toJson request.headers}}},
+            "queryParams": {{#if request.queryParams}}{{{toJson request.queryParams}}}{{else}}{}{{/if}},
+            "body": {{#if request.body}}{{{request.body}}}{{else}}null{{/if}}
+          }
+        }
+      headers:
+        Content-Type: application/json

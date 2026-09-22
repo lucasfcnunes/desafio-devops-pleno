@@ -22,10 +22,15 @@ extraObjects:
     spec:
       action: ALLOW
       rules:
-        - from:
-            - source:
-                requestPrincipals:
-                  - "*"
+        - #
+          # from:
+          #   - source:
+          #       requestPrincipals:
+          #         - "*"
+          when:
+            - key: request.auth.principal
+              values:
+                - "*"
   dr-service-2:
     apiVersion: networking.istio.io/v1beta1
     kind: DestinationRule
@@ -33,16 +38,7 @@ extraObjects:
       name: service-2-mtls
     spec:
       host: service-2.service-2.svc.cluster.local
-      trafficPolicy:
-        tls:
-          mode: ISTIO_MUTUAL
-  dr-service-1:
-    apiVersion: networking.istio.io/v1beta1
-    kind: DestinationRule
-    metadata:
-      name: service-1-mtls
-    spec:
-      host: service-1.service-1.svc.cluster.local
+      # host: '*.service-2.svc.cluster.local'
       trafficPolicy:
         tls:
           mode: ISTIO_MUTUAL
@@ -94,19 +90,27 @@ extraObjects:
       gateways:
         - service-1-gateway
       http:
-        - match:
-            - uri:
-                regex: ^/service-2(/.*)?
-          route:
+        - route:
             - destination:
                 host: service-2.service-2.svc.cluster.local
                 port:
                   number: 80
-        - match:
+          match:
             - uri:
-                regex: ^/service-1(/.*)?
-          route:
+                regex: &rs2 /service-2(/|$)(.*)
+          rewrite:
+            uriRegexRewrite:
+              match: *rs2
+              rewrite: /\2
+        - route:
             - destination:
                 host: service-1.service-1.svc.cluster.local
                 port:
                   number: 80
+          match:
+            - uri:
+                regex: &rs1 /service-1(/|$)(.*)
+          rewrite:
+            uriRegexRewrite:
+              match: *rs1
+              rewrite: /\2
