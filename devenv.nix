@@ -110,6 +110,7 @@
       # pkgs.virtualbox
     ]
     ++ [
+      pkgs.hurl
       pkgs.ripgrep
       pkgs.k9s
       pkgs.jujutsu

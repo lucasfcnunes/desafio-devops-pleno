@@ -118,3 +118,7 @@ tasks:
       # - task: jwk:setup
       - task: helmfile:sync
       # - k6
+  k6:test:
+    dir: ./k6/
+    cmds:
+      - k6 run ./test.js
