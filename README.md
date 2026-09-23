@@ -539,7 +539,54 @@ kubectl logs -n miscellaneous job/curl-job-without-sidecar
 task k6:test
 ```
 
-This runs `k6/test.js` as a short validation and checks the JWT matrix across the gateway routes, including valid, invalid, missing, forbidden, and wrong-audience tokens. `service-1` and `service-3` return `401` for invalid JWTs, while `service-2` returns `403` because it does not validate JWTs and only accepts the `service-1` mTLS principal. Valid and denied routes are checked with the corresponding `200` and `403` expectations.
+This runs `k6/test.js` as a short validation and checks the JWT matrix across the gateway routes, including valid, invalid, missing, and wrong-audience tokens. `service-1` and `service-3` return `401` for invalid JWTs, while `service-2` returns `403` because it does not validate JWTs and only accepts the `service-1` mTLS principal. Valid and denied routes are checked with the corresponding `200` and `403` expectations.
+
+```console
+  (...)
+  █ TOTAL RESULTS 
+
+    checks_total.......: 36      17.947806/s
+    checks_succeeded...: 100.00% 36 out of 36
+    checks_failed......: 0.00%   0 out of 36
+
+    ✓ JWT(exists=N valid=x aud=x); GW=1->SVC=1 path=                       ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=N aud=x); GW=1->SVC=1 path=                       ; -> expected=401; actual=401;
+    ✓ JWT(exists=Y valid=Y aud=Y); GW=1->SVC=1 path=                       ; -> expected=200; actual=200;
+    ✓ JWT(exists=Y valid=Y aud=N); GW=1->SVC=1 path=                       ; -> expected=403; actual=403;
+    ✓ JWT(exists=N valid=x aud=x); GW=1->SVC=1 path=/service-2             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=N aud=x); GW=1->SVC=1 path=/service-2             ; -> expected=401; actual=401;
+    ✓ JWT(exists=Y valid=Y aud=Y); GW=1->SVC=1 path=/service-2             ; -> expected=200; actual=200;
+    ✓ JWT(exists=Y valid=Y aud=N); GW=1->SVC=1 path=/service-2             ; -> expected=403; actual=403;
+    ✓ JWT(exists=N valid=x aud=x); GW=1->SVC=1 path=/service-3             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=N aud=x); GW=1->SVC=1 path=/service-3             ; -> expected=401; actual=401;
+    ✓ JWT(exists=Y valid=Y aud=Y); GW=1->SVC=1 path=/service-3             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=Y aud=N); GW=1->SVC=1 path=/service-3             ; -> expected=403; actual=403;
+    ✓ JWT(exists=N valid=x aud=x); GW=1->SVC=2 path=                       ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=N aud=x); GW=1->SVC=2 path=                       ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=Y aud=Y); GW=1->SVC=2 path=                       ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=Y aud=N); GW=1->SVC=2 path=                       ; -> expected=403; actual=403;
+    ✓ JWT(exists=N valid=x aud=x); GW=1->SVC=2 path=/service-1             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=N aud=x); GW=1->SVC=2 path=/service-1             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=Y aud=Y); GW=1->SVC=2 path=/service-1             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=Y aud=N); GW=1->SVC=2 path=/service-1             ; -> expected=403; actual=403;
+    ✓ JWT(exists=N valid=x aud=x); GW=1->SVC=2 path=/service-3             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=N aud=x); GW=1->SVC=2 path=/service-3             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=Y aud=Y); GW=1->SVC=2 path=/service-3             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=Y aud=N); GW=1->SVC=2 path=/service-3             ; -> expected=403; actual=403;
+    ✓ JWT(exists=N valid=x aud=x); GW=3->SVC=3 path=                       ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=N aud=x); GW=3->SVC=3 path=                       ; -> expected=401; actual=401;
+    ✓ JWT(exists=Y valid=Y aud=Y); GW=3->SVC=3 path=                       ; -> expected=200; actual=200;
+    ✓ JWT(exists=Y valid=Y aud=N); GW=3->SVC=3 path=                       ; -> expected=403; actual=403;
+    ✓ JWT(exists=N valid=x aud=x); GW=3->SVC=3 path=/service-1             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=N aud=x); GW=3->SVC=3 path=/service-1             ; -> expected=401; actual=401;
+    ✓ JWT(exists=Y valid=Y aud=Y); GW=3->SVC=3 path=/service-1             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=Y aud=N); GW=3->SVC=3 path=/service-1             ; -> expected=403; actual=403;
+    ✓ JWT(exists=N valid=x aud=x); GW=3->SVC=3 path=/service-2             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=N aud=x); GW=3->SVC=3 path=/service-2             ; -> expected=401; actual=401;
+    ✓ JWT(exists=Y valid=Y aud=Y); GW=3->SVC=3 path=/service-2             ; -> expected=403; actual=403;
+    ✓ JWT(exists=Y valid=Y aud=N); GW=3->SVC=3 path=/service-2             ; -> expected=403; actual=403;
+  (...)
+```
 
 ### KEDA stress test
 

@@ -75,26 +75,27 @@ function runJwtMatrixChecks({
   invalidJwt,
   swappedAudienceJwt,
   validJwtExpectedStatus,
+  invalidJwtExpectedStatus,
 }) {
   const PAD_LENGTH = 40;
   const noTokenResponse = http.get(url, requestOptions());
   check(noTokenResponse, {
-    [`JWT(exists=N valid=x aud=x); ${label.padEnd(PAD_LENGTH, " ")}; -> 403`]: (
+    [`JWT(exists=N valid=x aud=x); ${label.padEnd(PAD_LENGTH, " ")}; -> expected=403; actual=${noTokenResponse.status};`]: (
       r,
     ) => r.status === 403,
   });
 
   const invalidTokenResponse = http.get(url, requestOptions(invalidJwt));
   check(invalidTokenResponse, {
-    [`JWT(exists=Y valid=N aud=x); ${label.padEnd(PAD_LENGTH, " ")}; -> 401`]: (
+    [`JWT(exists=Y valid=N aud=x); ${label.padEnd(PAD_LENGTH, " ")}; -> expected=${invalidJwtExpectedStatus}; actual=${invalidTokenResponse.status};`]: (
       r,
-    ) => r.status === 401,
+    ) => r.status === invalidJwtExpectedStatus,
   });
 
   if (forbiddenJwt) {
     const forbiddenTokenResponse = http.get(url, requestOptions(forbiddenJwt));
     check(forbiddenTokenResponse, {
-      [`JWT(forbidden=Y); ${label.padEnd(PAD_LENGTH, " ")}; -> 403`]: (r) =>
+      [`JWT(forbidden=Y); ${label.padEnd(PAD_LENGTH, " ")}; -> expected=403; actual=${forbiddenTokenResponse.status};`]: (r) =>
         r.status === 403,
     });
   }
@@ -102,7 +103,7 @@ function runJwtMatrixChecks({
   if (validJwt) {
     const validTokenResponse = http.get(url, requestOptions(validJwt));
     check(validTokenResponse, {
-      [`JWT(exists=Y valid=Y aud=Y); ${label.padEnd(PAD_LENGTH, " ")}; -> ${validJwtExpectedStatus}`]:
+      [`JWT(exists=Y valid=Y aud=Y); ${label.padEnd(PAD_LENGTH, " ")}; -> expected=${validJwtExpectedStatus}; actual=${validTokenResponse.status};`]:
         (r) => r.status === validJwtExpectedStatus,
     });
   }
@@ -113,7 +114,7 @@ function runJwtMatrixChecks({
       requestOptions(swappedAudienceJwt),
     );
     check(swappedAudienceResponse, {
-      [`JWT(exists=Y valid=Y aud=N); ${label.padEnd(PAD_LENGTH, " ")}; -> 403`]:
+      [`JWT(exists=Y valid=Y aud=N); ${label.padEnd(PAD_LENGTH, " ")}; -> expected=403; actual=${swappedAudienceResponse.status};`]:
         (r) => r.status === 403,
     });
   }
@@ -239,13 +240,15 @@ export default function (data) {
         continue;
       }
 
-      const validJwtExpectedStatus =
+      const validJwtExpectedStatus = 
         (target.serviceName === "service-1" && pathSuffix === "/service-2") ||
-        (target.serviceName !== "service-2" && pathSuffix === "/")
+        (target.serviceName !== "service-2" && pathSuffix === "")
           ? 200
           : 403;
 
       // if (validJwtExpectedStatus !== 200) {continue}; // only OK!
+
+      const invalidJwtExpectedStatus = (target.serviceName === "service-2") ? 403 : 401;
 
       runJwtMatrixChecks({
         label: `${target.label} path=${pathSuffix}`,
@@ -255,6 +258,7 @@ export default function (data) {
         invalidJwt: INVALID_JWT,
         swappedAudienceJwt: target.swappedAudienceJwt,
         validJwtExpectedStatus,
+        invalidJwtExpectedStatus,
       });
     }
   }

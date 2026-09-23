@@ -2,10 +2,11 @@
 mappings:
   - priority: 1
     request:
+      # TODO: investigate why prefix removal is not working as expected
       urlPathPattern: /(service-\d+)(/|$)(.*)
     response:
-      proxyBaseUrl: http://{{request.pathSegments.[0]}}.{{request.pathSegments.[0]}}.svc.cluster.local
-      proxyUrlPrefixToRemove: /{{request.pathSegments.[0]}}
+      proxyBaseUrl: http://{{request.pathSegments.[0]}}.{{request.pathSegments.[0]}}.svc.cluster.local/{{request.pathSegments.[2]}}
+      # proxyUrlPrefixToRemove: /{{request.pathSegments.[0]}}
   - priority: 10
     request:
       urlPathPattern: .*

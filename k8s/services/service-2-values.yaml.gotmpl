@@ -12,7 +12,16 @@ extraObjects:
             - source:
                 principals:
                   - cluster.local/ns/service-1/sa/service-1
-          when:
-            - key: request.auth.principal
-              values:
-                - "*"
+  dr-service-2:
+    apiVersion: networking.istio.io/v1beta1
+    kind: DestinationRule
+    metadata:
+      name: service-2-mtls
+    spec:
+      host: service-2.service-2.svc.cluster.local
+      # host: '*.service-2.svc.cluster.local'
+      exportTo:
+        - "*"
+      trafficPolicy:
+        tls:
+          mode: ISTIO_MUTUAL
