@@ -42,26 +42,37 @@ I chose `Vagrant + libvirt` as the provisioning foundation.
 
 ```mermaid
 flowchart LR
-    ext1[External client] -->|HTTPS + JWT| GW[Istio Ingress Gateway\nLoadBalancer in istio-system]
-    ext2[External client] -->|HTTPS + JWT| GW
+  ext1[External client] -->|HTTPS + JWT| g1
+  ext2[External client] -->|HTTPS + JWT| g3
+
+  subgraph cluster[Kubernetes cluster]
+    subgraph ingress_ns[namespace: istio-system]
+      GW[istio-ingressgateway\nshared LoadBalancer Service]
+        end
 
     subgraph mesh[Istio mesh]
-        subgraph ns1[namespace: service-1]
-            s1[service-1]
-        end
+      subgraph ns1[namespace: service-1]
+        g1[Gateway\nservice-1.desafio-devops.local]
+        s1[service-1]
+      end
 
-        subgraph ns2[namespace: service-2]
-            s2[service-2]
-        end
+      subgraph ns2[namespace: service-2]
+        s2[service-2]
+      end
 
-        subgraph ns3[namespace: service-3]
-            s3[service-3]
+      subgraph ns3[namespace: service-3]
+        g3[Gateway\nservice-3.desafio-devops.local]
+        s3[service-3]
+      end
         end
     end
 
-    GW -->|JWT validate| s1
-    s1 -->|mTLS| s2
-    GW -->|JWT validate| s3
+  g1 -.->|selects shared ingress| GW
+  g3 -.->|selects shared ingress| GW
+  g1 -->|/service-1...\nshared istio-ingressgateway| s1
+  s1 -->|/service-1/service-2\nmTLS\nSA: service-1| s2
+  g1 -.->|/service-2\nblocked: 403| s2
+  g3 -->|/service-3...\nshared istio-ingressgateway| s3
 
     s1 -. blocked .-> s3
     s2 -. blocked .-> s3
@@ -87,10 +98,10 @@ This design preserves:
 
 Note on where JWT is actually checked: the `Gateway` itself only terminates TLS and routes traffic; it does not evaluate JWTs. `RequestAuthentication` in `service-1` and `service-3` has no workload selector, so it applies to every workload in that namespace, and the check runs on the Envoy sidecar of the destination pod, right after traffic leaves the shared Gateway.
 
-The `service-1` `Gateway`/`VirtualService` pair is also what proves the `service-2` isolation requirement. The `VirtualService` on that `Gateway` defines two path-based routes: a request to `/service-2` is routed straight to the `service-2` workload, and a request to `/service-1/service-2` is routed to the `service-1` workload with the `/service-1` prefix stripped, so the `service-1` `wiremock` instance then proxies it onward to `service-2` using its own `ServiceAccount` identity. Both requests reach `service-2`'s Envoy sidecar over mTLS, but only the second one is accepted:
+The `service-1` `Gateway`/`VirtualService` pair is also what proves the `service-2` isolation requirement. The `VirtualService` on that `Gateway` defines two path-based routes: a request to `/service-2` is routed straight to the `service-2` workload, and a request to `/service-1/service-2` is routed to the `service-1` workload with the `/service-1` prefix stripped, so the `service-1` `wiremock` instance then proxies it onward to `service-2` using the principal `cluster.local/ns/service-1/sa/service-1`. Both requests reach `service-2`'s Envoy sidecar over mTLS, but only the second one is accepted:
 
 - `GET /service-2` on the `service-1` `Gateway` — the request arrives at `service-2` carrying the `istio-ingressgateway` principal, which is not `service-1`, so `service-2`'s `AuthorizationPolicy` rejects it (`403`)
-- `GET /service-1/service-2` on the `service-1` `Gateway` — the request first lands on `service-1`, which then calls `service-2` under its own `ServiceAccount` identity, so `service-2`'s `AuthorizationPolicy` allows it (`200`)
+- `GET /service-1/service-2` on the `service-1` `Gateway` — the request first lands on `service-1`, which then calls `service-2` under `cluster.local/ns/service-1/sa/service-1`, so `service-2`'s `AuthorizationPolicy` allows it (`200`)
 
 This is exactly why `service-2` is deliberately also reachable directly: not because there is no route to it, but so that a request bypassing `service-1`'s identity can be demonstrated and shown being rejected by identity-based `AuthorizationPolicy`, not by network unreachability.
 
@@ -419,7 +430,17 @@ Repeat for `service-3`:
 ```bash
 curl -i https://service-3.desafio-devops.local/service-3 \
   --cacert ./fake-vault/tls/rootCA.pem.crt
+
+curl -i https://service-3.desafio-devops.local/service-3 \
+  -H "Authorization: Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0." \
+  --cacert ./fake-vault/tls/rootCA.pem.crt
+
+curl -i https://service-3.desafio-devops.local/service-3 \
+  -H "Authorization: Bearer $(cat ./fake-vault/jwt/token.dec.jwt)" \
+  --cacert ./fake-vault/tls/rootCA.pem.crt
 ```
+
+The expected results are the same as for `service-1`: no token returns `403`, an invalid token returns `401`, and a valid token returns `200`. For the complete automated matrix, including forbidden and wrong-audience tokens on all gateway paths, run `task k6:test` as described in [section 7](#7-automated-validation-tasks).
 
 ### 6.4 Blocking direct access to `service-2`
 
@@ -481,7 +502,66 @@ Expected result: `200`. Unlike the `/service-2` path used in [6.4](#64-blocking-
 
 ---
 
-## 7. Rationale behind non-trivial decisions
+## 7. Automated validation tasks
+
+The repository also provides Taskfile commands that exercise the scenarios from inside the cluster and through the external gateways:
+
+### mTLS and authorization validation
+
+```bash
+task mtls:test
+```
+
+This enables the `miscellaneous` Helmfile release and creates two Kubernetes Jobs in the `miscellaneous` namespace:
+
+- `curl-job-with-sidecar`: runs requests with an injected Istio sidecar
+- `curl-job-without-sidecar`: runs requests without an Istio sidecar
+
+The Jobs attempt to call `service-1`, `service-2`, and `service-3`. This demonstrates the difference between traffic carrying a mesh identity and traffic from a pod without a sidecar, including the direct access rejection enforced by `service-2`'s `AuthorizationPolicy`.
+
+Inspect the generated Jobs and logs with:
+
+```bash
+kubectl get jobs,pods -n miscellaneous
+kubectl logs -n miscellaneous job/curl-job-with-sidecar
+kubectl logs -n miscellaneous job/curl-job-without-sidecar
+```
+
+### JWT matrix validation
+
+```bash
+task k6:test
+```
+
+This runs `k6/test.js` as a short validation and checks the JWT matrix across the gateway routes, including valid, invalid, missing, forbidden, and wrong-audience tokens. The checks cover the expected `200`, `401`, and `403` outcomes for `service-1`, `service-2`, and `service-3` routes.
+
+### KEDA stress test
+
+```bash
+task k6:stress
+```
+
+This runs the longer k6 workload defined in `k6/test.js` and generates traffic against the JWT-protected routes so the Istio request metric can trigger the KEDA `ScaledObject`.
+
+Observe scale-up and scale-down in another terminal:
+
+```bash
+kubectl get scaledobjects -A
+kubectl get hpa -A
+kubectl get pods -n service-1 -w
+```
+
+The complete sequence is also available through:
+
+```bash
+task test
+```
+
+It runs `mtls:test`, `jwt:test`, `k6:test`, and `k6:stress`.
+
+---
+
+## 8. Rationale behind non-trivial decisions
 
 ### `libvirt` instead of `VirtualBox`
 
@@ -492,7 +572,12 @@ Expected result: `200`. Unlike the `/service-2` path used in [6.4](#64-blocking-
 ### k3s version
 
 - `v1.37.0+k3s1` was chosen to keep a recent version compatible with the modern Kubernetes ecosystem
-- the combination with Ubuntu 24.04 also reduces system incompatibilities
+
+### Base image: Ubuntu 24.04
+
+The current configuration uses `bento/ubuntu-24.04`. I also tested `bento/ubuntu-26.04` because it is newer, recently supported as an LTS release, and can reduce the number of known CVEs over time. However, that image exposed compatibility problems in this specific provisioning chain, including Vagrant SSH key creation and Ansible provisioning. Ubuntu 24.04 was kept because the Vagrant SSH bootstrap and Ansible provisioning completed reliably with it.
+
+This is a reproducibility decision rather than a claim that Ubuntu 24.04 is inherently more secure than Ubuntu 26.04. The base image can be revisited when the Vagrant/Bento SSH workflow and the Ansible dependencies provide stable support for Ubuntu 26.04.
 
 ### CNI and Istio
 
@@ -535,7 +620,7 @@ Expected result: `200`. Unlike the `/service-2` path used in [6.4](#64-blocking-
 
 ---
 
-## 8. Bonus — autoscaling with KEDA + Prometheus
+## 9. Bonus — autoscaling with KEDA + Prometheus
 
 The repository already includes support for observing Istio metrics and scaling services with KEDA.
 
@@ -585,7 +670,7 @@ kubectl get pods -n service-1 -w
 
 ---
 
-## 9. Repository structure
+## 10. Repository structure
 
 ```text
 .
@@ -614,7 +699,7 @@ kubectl get pods -n service-1 -w
 
 ---
 
-## 10. Final notes
+## 11. Final notes
 
 This challenge was implemented with a focus on:
 

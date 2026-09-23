@@ -42,26 +42,37 @@ Escolhi `Vagrant + libvirt` como base de provisionamento.
 
 ```mermaid
 flowchart LR
-    ext1[Cliente externo] -->|HTTPS + JWT| GW[Istio Ingress Gateway\nLoadBalancer em istio-system]
-    ext2[Cliente externo] -->|HTTPS + JWT| GW
+  ext1[Cliente externo] -->|HTTPS + JWT| g1
+  ext2[Cliente externo] -->|HTTPS + JWT| g3
+
+  subgraph cluster[Cluster Kubernetes]
+    subgraph ingress_ns[namespace: istio-system]
+      GW[istio-ingressgateway\nService LoadBalancer compartilhado]
+        end
 
     subgraph mesh[Istio mesh]
-        subgraph ns1[namespace: service-1]
-            s1[service-1]
-        end
+      subgraph ns1[namespace: service-1]
+        g1[Gateway\nservice-1.desafio-devops.local]
+        s1[service-1]
+      end
 
-        subgraph ns2[namespace: service-2]
-            s2[service-2]
-        end
+      subgraph ns2[namespace: service-2]
+        s2[service-2]
+      end
 
-        subgraph ns3[namespace: service-3]
-            s3[service-3]
+      subgraph ns3[namespace: service-3]
+        g3[Gateway\nservice-3.desafio-devops.local]
+        s3[service-3]
+      end
         end
     end
 
-    GW -->|JWT validate| s1
-    s1 -->|mTLS| s2
-    GW -->|JWT validate| s3
+  g1 -.->|seleciona ingress compartilhado| GW
+  g3 -.->|seleciona ingress compartilhado| GW
+  g1 -->|/service-1...\nmesmo istio-ingressgateway| s1
+  s1 -->|/service-1/service-2\nmTLS\nSA: service-1| s2
+  g1 -.->|/service-2\nbloqueado: 403| s2
+  g3 -->|/service-3...\nmesmo istio-ingressgateway| s3
 
     s1 -. bloqueado .-> s3
     s2 -. bloqueado .-> s3
@@ -87,10 +98,10 @@ Esse desenho preserva:
 
 Nota sobre onde o JWT é de fato validado: o `Gateway` em si apenas termina o TLS e roteia o tráfego; ele não valida o JWT. O `RequestAuthentication` em `service-1` e `service-3` não tem `selector` de workload, então se aplica a todos os workloads daquele namespace, e a validação roda no sidecar Envoy do pod de destino, logo depois que o tráfego sai do Gateway compartilhado.
 
-O par `Gateway`/`VirtualService` do `service-1` é também o que prova o requisito de isolamento do `service-2`. O `VirtualService` dessa `Gateway` define duas rotas baseadas em path: uma requisição para `/service-2` é roteada diretamente ao workload `service-2`, e uma requisição para `/service-1/service-2` é roteada ao workload `service-1` com o prefixo `/service-1` removido, e então a instância `wiremock` do `service-1` faz o proxy adiante para `service-2` usando a própria identidade da `ServiceAccount`. As duas requisições chegam ao sidecar Envoy do `service-2` via mTLS, mas apenas a segunda é aceita:
+O par `Gateway`/`VirtualService` do `service-1` é também o que prova o requisito de isolamento do `service-2`. O `VirtualService` dessa `Gateway` define duas rotas baseadas em path: uma requisição para `/service-2` é roteada diretamente ao workload `service-2`, e uma requisição para `/service-1/service-2` é roteada ao workload `service-1` com o prefixo `/service-1` removido, e então a instância `wiremock` do `service-1` faz o proxy adiante para `service-2` usando o principal `cluster.local/ns/service-1/sa/service-1`. As duas requisições chegam ao sidecar Envoy do `service-2` via mTLS, mas apenas a segunda é aceita:
 
 - `GET /service-2` na `Gateway` do `service-1` — a requisição chega ao `service-2` carregando o principal do `istio-ingressgateway`, que não é o `service-1`, então a `AuthorizationPolicy` do `service-2` a rejeita (`403`)
-- `GET /service-1/service-2` na `Gateway` do `service-1` — a requisição passa primeiro pelo `service-1`, que então chama o `service-2` com sua própria identidade de `ServiceAccount`, então a `AuthorizationPolicy` do `service-2` a aceita (`200`)
+- `GET /service-1/service-2` na `Gateway` do `service-1` — a requisição passa primeiro pelo `service-1`, que então chama o `service-2` usando `cluster.local/ns/service-1/sa/service-1`, então a `AuthorizationPolicy` do `service-2` a aceita (`200`)
 
 É exatamente por isso que o `service-2` também é exposto diretamente de propósito: não porque falte rota até ele, mas para permitir demonstrar uma requisição que ignora a identidade do `service-1` e mostrar que ela é rejeitada pela `AuthorizationPolicy` baseada em identidade, e não por inalcançabilidade de rede.
 
@@ -419,7 +430,17 @@ Repetir para `service-3`:
 ```bash
 curl -i https://service-3.desafio-devops.local/service-3 \
   --cacert ./fake-vault/tls/rootCA.pem.crt
+
+curl -i https://service-3.desafio-devops.local/service-3 \
+  -H "Authorization: Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0." \
+  --cacert ./fake-vault/tls/rootCA.pem.crt
+
+curl -i https://service-3.desafio-devops.local/service-3 \
+  -H "Authorization: Bearer $(cat ./fake-vault/jwt/token.dec.jwt)" \
+  --cacert ./fake-vault/tls/rootCA.pem.crt
 ```
+
+Os resultados esperados são os mesmos de `service-1`: sem token retorna `403`, token inválido retorna `401` e token válido retorna `200`. Para a matriz automatizada completa, incluindo tokens proibido e com audience incorreto em todas as rotas das Gateways, execute `task k6:test`, descrita na [seção 7](#7-tasks-de-validação-automatizada).
 
 ### 6.4 Bloqueio do acesso direto ao `service-2`
 
@@ -481,7 +502,66 @@ Resultado esperado: `200`. Diferente do path `/service-2` usado em [6.4](#64-blo
 
 ---
 
-## 7. Justificativa de decisões não triviais
+## 7. Tasks de validação automatizada
+
+O repositório também oferece comandos do Taskfile que exercitam os cenários de dentro do cluster e pelas Gateways externas:
+
+### Validação de mTLS e autorização
+
+```bash
+task mtls:test
+```
+
+Essa task habilita o release Helmfile `miscellaneous` e cria dois Jobs Kubernetes no namespace `miscellaneous`:
+
+- `curl-job-with-sidecar`: executa requisições com sidecar Istio injetado
+- `curl-job-without-sidecar`: executa requisições sem sidecar Istio
+
+Os Jobs tentam acessar `service-1`, `service-2` e `service-3`. Isso demonstra a diferença entre tráfego com identidade da malha e tráfego originado de um pod sem sidecar, incluindo a rejeição do acesso direto aplicada pela `AuthorizationPolicy` do `service-2`.
+
+Inspecione os Jobs e logs com:
+
+```bash
+kubectl get jobs,pods -n miscellaneous
+kubectl logs -n miscellaneous job/curl-job-with-sidecar
+kubectl logs -n miscellaneous job/curl-job-without-sidecar
+```
+
+### Validação da matriz JWT
+
+```bash
+task k6:test
+```
+
+Essa task executa `k6/test.js` como uma validação curta e verifica a matriz de JWT nas rotas das Gateways, incluindo tokens válido, inválido, ausente, proibido e com audience incorreto. Os testes cobrem os resultados esperados `200`, `401` e `403` nas rotas de `service-1`, `service-2` e `service-3`.
+
+### Teste de stress do KEDA
+
+```bash
+task k6:stress
+```
+
+Essa task executa a carga mais longa definida em `k6/test.js` e gera tráfego nas rotas protegidas por JWT para que a métrica de requisições do Istio acione o `ScaledObject` do KEDA.
+
+Observe o scale-up e o scale-down em outro terminal:
+
+```bash
+kubectl get scaledobjects -A
+kubectl get hpa -A
+kubectl get pods -n service-1 -w
+```
+
+A sequência completa também está disponível em:
+
+```bash
+task test
+```
+
+Ela executa `mtls:test`, `jwt:test`, `k6:test` e `k6:stress`.
+
+---
+
+## 8. Justificativa de decisões não triviais
 
 ### `libvirt` em vez de `VirtualBox`
 
@@ -492,7 +572,12 @@ Resultado esperado: `200`. Diferente do path `/service-2` usado em [6.4](#64-blo
 ### Versão do k3s
 
 - `v1.37.0+k3s1` foi escolhida para manter uma versão recente e compatível com o ecossistema moderno do Kubernetes
-- a combinação com Ubuntu 24.04 também reduz incompatibilidades de sistema
+
+### Imagem base: Ubuntu 24.04
+
+A configuração atual usa `bento/ubuntu-24.04`. Também testei o `bento/ubuntu-26.04` por ser mais recente, ter suporte LTS recente e poder reduzir a quantidade de CVEs conhecidos ao longo do tempo. Porém, essa imagem apresentou problemas de compatibilidade neste fluxo específico de provisionamento, incluindo a criação da chave SSH do Vagrant e o provisionamento via Ansible. Mantive o Ubuntu 24.04 porque o bootstrap SSH do Vagrant e o provisionamento Ansible funcionaram de forma confiável com ele.
+
+Essa é uma decisão de reprodutibilidade, e não a afirmação de que o Ubuntu 24.04 é inerentemente mais seguro que o Ubuntu 26.04. A imagem base pode ser revisitada quando o fluxo de SSH do Vagrant/Bento e as dependências do Ansible oferecerem suporte estável ao Ubuntu 26.04.
 
 ### CNI e Istio
 
@@ -535,7 +620,7 @@ Resultado esperado: `200`. Diferente do path `/service-2` usado em [6.4](#64-blo
 
 ---
 
-## 8. Bônus — autoscaling com KEDA + Prometheus
+## 9. Bônus — autoscaling com KEDA + Prometheus
 
 O repositório já inclui o suporte para observar métricas do Istio e escalar serviços com KEDA.
 
@@ -585,7 +670,7 @@ kubectl get pods -n service-1 -w
 
 ---
 
-## 9. Estrutura do repositório
+## 10. Estrutura do repositório
 
 ```text
 .
@@ -614,7 +699,7 @@ kubectl get pods -n service-1 -w
 
 ---
 
-## 10. Observações finais
+## 11. Observações finais
 
 Este desafio foi implementado com foco em:
 
