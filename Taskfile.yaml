@@ -1,5 +1,13 @@
 version: "3"
 tasks:
+  devenv:setup:
+    cmds:
+      - devenv --version
+      - devenv allow
+      # - cmd: direnv allow
+      #   ignore_error: true
+      - devenv tasks run devenv:hostctl:setup
+      - hostctl list -o raw | grep -iE '.*\.desafio-devops\..*'
   ansible:requirements-setup:
     dir: ./ansible/
     cmds:
@@ -166,6 +174,7 @@ tasks:
       # - task: jwk:setup
       - task: helmfile:sync
       - task: kapply:svc-1.yaml
+      - task: devops:processesd
       - task: test
   test:
     cmds:
@@ -191,3 +200,8 @@ tasks:
       INSTALL_MISCELLANEOUS: "true"
     cmds:
       - helmfile -l installed=false apply
+  devops:processesd:
+    desc: port-forwarding for devops processes
+    cmds:
+      - devenv processes up -d
+      - devenv processes list

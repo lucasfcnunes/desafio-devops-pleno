@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "datakurre.devenv",
+    "eamodio.gitlens",
+    "ms-kubernetes-tools.vscode-kubernetes-tools",
+    "signageos.signageos-vscode-sops",
+    "visualjj.visualjj"
+  ]
+}

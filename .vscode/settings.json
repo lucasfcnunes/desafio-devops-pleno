@@ -1,0 +1,10 @@
+{
+  "editor.formatOnSave": true,
+  "files.associations": {
+    "*.yaml.gotmpl": "yaml"
+  },
+  "workbench.browser.enableRemoteProxy": true,
+  "workbench.browser.newTabPlacement": "window",
+  "workbench.browser.openLocalhostLinks": true,
+  "workbench.browser.showInTitleBar": true,
+}

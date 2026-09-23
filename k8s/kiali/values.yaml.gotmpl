@@ -11,6 +11,7 @@ cr:
       grafana:
         enabled: true
         internal_url: http://kps-grafana.monitoring.svc.cluster.local:80
+        external_url: http://localhost:3000
         auth:
           insecure_skip_verify: false
           password: ref+sops://./secrets.enc.yaml#grafana/admin-password
