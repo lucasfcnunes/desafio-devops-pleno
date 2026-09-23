@@ -120,8 +120,20 @@ function runJwtMatrixChecks({
 }
 
 export const options = {
-  vus: 1,
-  duration: "30s",
+  stages: [
+    {
+      duration: "1m",
+      target: 30,
+    },
+    {
+      duration: "10m",
+      target: 30,
+    },
+    {
+      duration: "5m",
+      target: 0,
+    },
+  ],
   insecureSkipTLSVerify: INSECURE_SKIP_TLS_VERIFY,
 };
 

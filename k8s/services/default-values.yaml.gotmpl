@@ -92,3 +92,25 @@ extraObjects:
     spec:
       mtls:
         mode: STRICT
+  so:
+    apiVersion: keda.sh/v1alpha1
+    kind: ScaledObject
+    metadata:
+      name: '{{`{{ .Release.Name }}`}}'
+    spec:
+      scaleTargetRef:
+        name: '{{`{{ .Release.Name }}`}}'
+      minReplicaCount: 1
+      maxReplicaCount: 3
+      triggers:
+        - type: prometheus
+          metadata:
+            serverAddress: http://kps-prometheus.monitoring.svc.cluster.local:9090
+            metricName: istio_rps_1m
+            threshold: '75'
+            query: |
+              sum(rate(istio_requests_total{
+                reporter="destination",
+                destination_workload_namespace="{{`{{ .Release.Namespace }}`}}",
+                destination_workload="{{`{{ .Release.Name }}`}}",
+              }[1m]))

@@ -137,6 +137,12 @@ tasks:
       - task: private.dec.jwk
     cmds:
       - k6 run ./test.js -i 1 --summary-mode full --http-debug=full --log-format json --quiet 2> >(yq -P -p json)
+  k6:stress:
+    dir: ./k6/
+    deps:
+      - task: private.dec.jwk
+    cmds:
+      - k6 run ./test.js
   mtls:test:
     dir: ./k8s/
     env:
