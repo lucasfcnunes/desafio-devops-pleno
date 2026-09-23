@@ -6,5 +6,5 @@
   "workbench.browser.enableRemoteProxy": true,
   "workbench.browser.newTabPlacement": "window",
   "workbench.browser.openLocalhostLinks": true,
-  "workbench.browser.showInTitleBar": true,
+  "workbench.browser.showInTitleBar": true
 }
