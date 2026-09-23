@@ -96,7 +96,7 @@ Esse desenho preserva:
 - `mTLS` interno obrigatório
 - isolamento por namespace via `AuthorizationPolicy`
 
-Nota sobre onde o JWT é de fato validado: o `Gateway` em si apenas termina o TLS e roteia o tráfego; ele não valida o JWT. O `RequestAuthentication` em `service-1` e `service-3` não tem `selector` de workload, então se aplica a todos os workloads daquele namespace, e a validação roda no sidecar Envoy do pod de destino, logo depois que o tráfego sai do Gateway compartilhado.
+Nota sobre onde o JWT é de fato validado: o `Gateway` em si apenas termina o TLS e roteia o tráfego; ele não valida o JWT. O `RequestAuthentication` em `service-1` e `service-3` não tem `selector` de workload, então se aplica a todos os workloads desses namespaces e a validação roda no sidecar Envoy do pod de destino. O `service-2` não exige nem valida JWT; seu controle de acesso é baseado exclusivamente no principal mTLS de origem.
 
 O par `Gateway`/`VirtualService` do `service-1` é também o que prova o requisito de isolamento do `service-2`. O `VirtualService` dessa `Gateway` define duas rotas baseadas em path: uma requisição para `/service-2` é roteada diretamente ao workload `service-2`, e uma requisição para `/service-1/service-2` é roteada ao workload `service-1` com o prefixo `/service-1` removido, e então a instância `wiremock` do `service-1` faz o proxy adiante para `service-2` usando o principal `cluster.local/ns/service-1/sa/service-1`. As duas requisições chegam ao sidecar Envoy do `service-2` via mTLS, mas apenas a segunda é aceita:
 
@@ -232,18 +232,18 @@ step crypto jwt sign \
 
 Este projeto foi desenvolvido para ser executado em Linux nativo. Alguns componentes dependem de recursos do Linux, incluindo KVM, libvirt, rede privada e as máquinas virtuais do k3s.
 
-O uso do WSL não é recomendado para este projeto ao utilizar o provedor libvirt. Executar VMs libvirt pelo WSL exige um kernel personalizado e integrações adicionais de virtualização, que não fazem parte da configuração suportada. Prefira uma instalação nativa do Linux.
+### Minha configuração do host
 
-### Setup do autor (exemplo)
+Minha máquina principal é Windows porque uso ferramentas de dados exclusivas dessa plataforma, como Power BI e Excel. O Linux roda em uma VM NixOS (uma distro Linux declarativa) no Hyper-V, e desenvolvo via SSH usando o VS Code Remote-SSH.
 
-Minha máquina principal é Windows, pois uso algumas ferramentas de dados exclusivas dessa plataforma (Power BI, Excel, etc.). O Linux roda virtualizado por cima, então este desafio foi desenvolvido dentro de uma VM NixOS (uma distro Linux declarativa) no Hyper-V, acessada via SSH usando o VS Code Remote-SSH.
+Também uso WSL para fluxos de trabalho Linux, mas ele não é recomendado para este projeto ao utilizar o provedor libvirt. Executar VMs libvirt pelo WSL exige um kernel personalizado e integrações adicionais de virtualização, que não fazem parte da configuração suportada. O cluster baseado em libvirt deve rodar na VM NixOS ou em outro ambiente Linux nativo.
 
-Para as VMs libvirt (nested) funcionarem de forma confiável sob o Hyper-V, precisei habilitar nested virtualization e MAC address spoofing no virtual switch usado pela VM do NixOS. A configuração do meu NixOS também exigiu duas mudanças, deixadas aqui como referência:
+Para minhas VMs libvirt (nested) funcionarem de forma confiável sob o Hyper-V, precisei habilitar nested virtualization e MAC address spoofing no virtual switch usado pela minha VM do NixOS. Minha configuração do NixOS também precisou de duas mudanças, deixadas aqui como referência:
 
 - [feat: add libvirt config · lucasfcnunes/dotfiles@62e7230](https://github.com/lucasfcnunes/dotfiles/commit/62e72309f1e5ff2e2d516882e6c01ed68a07f896) — habilita o `libvirtd`, permite tráfego entre bridges (`virbr*`/`vnet*`), ativa IP forwarding e desativa o reverse-path filtering estrito para o networking entre VMs funcionar.
 - [chore: make nixos more flexible on /etc/hosts editing for dev · lucasfcnunes/dotfiles@4968406](https://github.com/lucasfcnunes/dotfiles/commit/4968406f0c565d89ca17ef57f31cca49811256df) — no NixOS, o `/etc/hosts` normalmente é um symlink read-only gerenciado pelo Nix, o que quebra o `hostctl`; essa mudança torna o `/etc/hosts` writable e sincroniza a partir do arquivo original gerenciado pelo Nix no boot.
 
-Esse setup é específico da minha máquina e não é necessário para reproduzir o desafio — qualquer host Linux nativo (bare metal ou uma VM com nested virtualization habilitado) funciona.
+Esse setup é específico da minha máquina e não é necessário para reproduzir o desafio — qualquer host Linux nativo (bare metal ou uma VM com nested virtualization habilitada) funciona.
 
 ### Ambiente de desenvolvimento recomendado
 
@@ -252,6 +252,8 @@ O VS Code é recomendado porque oferece terminal integrado, suporte de edição 
 ### Instalação do devenv
 
 O `devenv` fornece as ferramentas declaradas em `devenv.nix`, incluindo Ansible, Vagrant, libvirt, QEMU/KVM, kubectl, Helm, Helmfile, k6, `step`, SOPS, Task e utilitários de apoio.
+
+O `devenv` também funciona em outras distribuições Linux; o NixOS é simplesmente o ambiente Linux que uso. O host ainda precisa ter suporte funcional a KVM/libvirt para executar as VMs do Vagrant.
 
 Instale o Nix com suporte a flakes:
 
@@ -286,14 +288,19 @@ direnv allow
 
 O arquivo `devenv.nix` é a fonte oficial da configuração do ambiente. Ao usar o `devenv`, não é necessário instalar globalmente todas as dependências do projeto; entre no shell antes de executar os comandos.
 
+Referências oficiais:
+
+- [Guia de instalação do Nix](https://nixos.org/download/)
+- [Instalação do devenv](https://devenv.sh/getting-started/)
+- [Fundamentos e shells do devenv](https://devenv.sh/basics/)
+
 ### Pré-requisitos do Linux nativo
 
 No host de desenvolvimento, instalar:
 
 ```bash
-# Ubuntu/Debian
 sudo apt-get update
-sudo apt-get install -y curl git make jq yq libvirt-daemon libvirt-clients qemu-kvm ansible
+sudo apt-get install -y libvirt-daemon-system libvirt-clients qemu-kvm
 ```
 
 Habilite o serviço do libvirt e garanta que o usuário atual tenha acesso aos recursos de virtualização:
@@ -305,15 +312,14 @@ sudo usermod -aG libvirt,kvm "$USER"
 
 Saia da sessão e entre novamente após alterar os grupos. Ao usar o ambiente `devenv` do repositório, as demais ferramentas são fornecidas automaticamente.
 
-Além disso:
+Depois de entrar no shell do `devenv`, as ferramentas do projeto ficam disponíveis automaticamente. Isso inclui Vagrant, Helm, kubectl, Helmfile, Ansible, k6, `step`, SOPS, Task, `yq`, `dyff` e os demais utilitários declarados em `devenv.nix`.
 
-- `vagrant`
-- `helm`
-- `kubectl`
-- `step`
-- `sops`
-- `mkcert`
-- `task`
+Referências sobre o host e o fluxo de desenvolvimento:
+
+- [Documentação do libvirt no Ubuntu](https://documentation.ubuntu.com/server/how-to/virtualisation/libvirt/)
+- [Provedor Vagrant libvirt](https://vagrant-libvirt.github.io/vagrant-libvirt/)
+- [Provisionador Ansible do Vagrant](https://developer.hashicorp.com/vagrant/docs/provisioning/ansible)
+- [Microsoft: nested virtualization](https://learn.microsoft.com/en-us/virtualization/hyper-v-on-windows/user-guide/nested-virtualization)
 
 ### 1) Clonar o repositório
 
@@ -444,7 +450,7 @@ Os resultados esperados são os mesmos de `service-1`: sem token retorna `403`, 
 
 ### 6.4 Bloqueio do acesso direto ao `service-2`
 
-A regra de `AuthorizationPolicy` para `service-2` aceita apenas a principal da `ServiceAccount` do `service-1`:
+A `AuthorizationPolicy` do `service-2` aceita tráfego somente quando o principal mTLS de origem é `cluster.local/ns/service-1/sa/service-1`. O `service-2` não exige nem valida JWT.
 
 ```bash
 kubectl describe authorizationpolicy service-2-only-from-service-1 -n service-2
@@ -533,7 +539,7 @@ kubectl logs -n miscellaneous job/curl-job-without-sidecar
 task k6:test
 ```
 
-Essa task executa `k6/test.js` como uma validação curta e verifica a matriz de JWT nas rotas das Gateways, incluindo tokens válido, inválido, ausente, proibido e com audience incorreto. Os testes cobrem os resultados esperados `200`, `401` e `403` nas rotas de `service-1`, `service-2` e `service-3`.
+Essa task executa `k6/test.js` como uma validação curta e verifica a matriz de JWT nas rotas das Gateways, incluindo tokens válido, inválido, ausente, proibido e com audience incorreto. `service-1` e `service-3` retornam `401` para JWTs inválidos, enquanto `service-2` retorna `403` porque não valida JWT e aceita somente o principal mTLS do `service-1`. As rotas válidas e negadas são verificadas com as expectativas correspondentes de `200` e `403`.
 
 ### Teste de stress do KEDA
 

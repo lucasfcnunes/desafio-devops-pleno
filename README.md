@@ -96,7 +96,7 @@ This design preserves:
 - mandatory internal `mTLS`
 - namespace isolation through `AuthorizationPolicy`
 
-Note on where JWT is actually checked: the `Gateway` itself only terminates TLS and routes traffic; it does not evaluate JWTs. `RequestAuthentication` in `service-1` and `service-3` has no workload selector, so it applies to every workload in that namespace, and the check runs on the Envoy sidecar of the destination pod, right after traffic leaves the shared Gateway.
+Note on where JWT is actually checked: the `Gateway` itself only terminates TLS and routes traffic; it does not evaluate JWTs. `RequestAuthentication` in `service-1` and `service-3` has no workload selector, so it applies to every workload in those namespaces and the check runs on the Envoy sidecar of the destination pod. `service-2` does not require or validate a JWT; its access control is based exclusively on the source mTLS principal.
 
 The `service-1` `Gateway`/`VirtualService` pair is also what proves the `service-2` isolation requirement. The `VirtualService` on that `Gateway` defines two path-based routes: a request to `/service-2` is routed straight to the `service-2` workload, and a request to `/service-1/service-2` is routed to the `service-1` workload with the `/service-1` prefix stripped, so the `service-1` `wiremock` instance then proxies it onward to `service-2` using the principal `cluster.local/ns/service-1/sa/service-1`. Both requests reach `service-2`'s Envoy sidecar over mTLS, but only the second one is accepted:
 
@@ -232,13 +232,13 @@ step crypto jwt sign \
 
 This project is designed to run on native Linux. Several components depend on Linux features, including KVM, libvirt, private networking, and the k3s virtual machines.
 
-WSL is not recommended for this project when using the libvirt provider. Running libvirt VMs from WSL requires a custom kernel and additional virtualization integration, which is outside the supported setup. Use a native Linux installation instead.
+### My host setup
 
-### Author's setup (example)
+My primary machine is Windows because I use Windows-only data tools such as Power BI and Excel. Linux runs in a NixOS VM (a declarative Linux distribution) on Hyper-V, and I develop over SSH using VS Code Remote-SSH.
 
-My day-to-day machine is Windows, since I rely on a few Windows-only data tools (Power BI, Excel, etc.). Linux runs virtualized on top of it, so this challenge was developed inside a NixOS VM (a declarative Linux distribution) on Hyper-V, connected to over SSH using VS Code Remote-SSH.
+I also use WSL for Linux workflows, but it is not recommended for this project when using the libvirt provider. Running libvirt VMs from WSL requires a custom kernel and additional virtualization integration, which is outside the supported setup. The libvirt-based cluster should run on the NixOS VM or another native Linux environment instead.
 
-To make libvirt nested VMs work reliably under Hyper-V, I had to enable nested virtualization and MAC address spoofing on the virtual switch used by the NixOS guest. My NixOS configuration itself needed two changes, kept here for reference:
+To make my nested libvirt VMs work reliably under Hyper-V, I had to enable nested virtualization and MAC address spoofing on the virtual switch used by my NixOS guest. My NixOS configuration also needed two changes, kept here for reference:
 
 - [feat: add libvirt config · lucasfcnunes/dotfiles@62e7230](https://github.com/lucasfcnunes/dotfiles/commit/62e72309f1e5ff2e2d516882e6c01ed68a07f896) — enables `libvirtd`, allows bridge-to-bridge traffic (`virbr*`/`vnet*`), enables IP forwarding, and disables strict reverse-path filtering so inter-VM networking works.
 - [chore: make nixos more flexible on /etc/hosts editing for dev · lucasfcnunes/dotfiles@4968406](https://github.com/lucasfcnunes/dotfiles/commit/4968406f0c565d89ca17ef57f31cca49811256df) — NixOS normally manages `/etc/hosts` as a read-only symlink, which breaks `hostctl`; this makes `/etc/hosts` writable and syncs it from the Nix-managed original on boot.
@@ -252,6 +252,8 @@ VS Code is recommended because it provides an integrated terminal, editor suppor
 ### Installing devenv
 
 `devenv` provides the project toolchain declared in `devenv.nix`, including Ansible, Vagrant, libvirt, QEMU/KVM, kubectl, Helm, Helmfile, k6, `step`, SOPS, Task, and supporting utilities.
+
+`devenv` also works on other Linux distributions; NixOS is simply the Linux environment I use. The host still needs working KVM/libvirt support for the Vagrant VMs.
 
 Install Nix with flakes enabled:
 
@@ -286,14 +288,19 @@ direnv allow
 
 The `devenv.nix` file is the source of truth for the development environment. Do not install every project dependency globally when using `devenv`; enter the shell first and run commands from there.
 
+Official references:
+
+- [Nix installation guide](https://nixos.org/download/)
+- [devenv installation](https://devenv.sh/getting-started/)
+- [devenv basics and shells](https://devenv.sh/basics/)
+
 ### Native Linux prerequisites
 
 On the development host, install:
 
 ```bash
-# Ubuntu/Debian
 sudo apt-get update
-sudo apt-get install -y curl git make jq yq libvirt-daemon libvirt-clients qemu-kvm ansible
+sudo apt-get install -y libvirt-daemon-system libvirt-clients qemu-kvm
 ```
 
 Enable the libvirt service and make sure the current user can access virtualization resources:
@@ -305,15 +312,14 @@ sudo usermod -aG libvirt,kvm "$USER"
 
 Log out and back in after changing group membership. If you use the repository's `devenv` environment, the remaining tools are provided automatically.
 
-Also required:
+Once you enter the `devenv` shell, the project utilities are available automatically. This includes Vagrant, Helm, kubectl, Helmfile, Ansible, k6, `step`, SOPS, Task, `yq`, `dyff`, and the other tools declared in `devenv.nix`.
 
-- `vagrant`
-- `helm`
-- `kubectl`
-- `step`
-- `sops`
-- `mkcert`
-- `task`
+Host and workflow references:
+
+- [Ubuntu libvirt documentation](https://documentation.ubuntu.com/server/how-to/virtualisation/libvirt/)
+- [Vagrant libvirt provider](https://vagrant-libvirt.github.io/vagrant-libvirt/)
+- [Vagrant Ansible provisioner](https://developer.hashicorp.com/vagrant/docs/provisioning/ansible)
+- [Microsoft: nested virtualization](https://learn.microsoft.com/en-us/virtualization/hyper-v-on-windows/user-guide/nested-virtualization)
 
 ### 1) Clone the repository
 
@@ -444,7 +450,7 @@ The expected results are the same as for `service-1`: no token returns `403`, an
 
 ### 6.4 Blocking direct access to `service-2`
 
-The `AuthorizationPolicy` for `service-2` accepts only the principal of the `ServiceAccount` for `service-1`:
+The `AuthorizationPolicy` for `service-2` accepts traffic only when the mTLS source principal is `cluster.local/ns/service-1/sa/service-1`. `service-2` does not require or validate a JWT.
 
 ```bash
 kubectl describe authorizationpolicy service-2-only-from-service-1 -n service-2
@@ -533,7 +539,7 @@ kubectl logs -n miscellaneous job/curl-job-without-sidecar
 task k6:test
 ```
 
-This runs `k6/test.js` as a short validation and checks the JWT matrix across the gateway routes, including valid, invalid, missing, forbidden, and wrong-audience tokens. The checks cover the expected `200`, `401`, and `403` outcomes for `service-1`, `service-2`, and `service-3` routes.
+This runs `k6/test.js` as a short validation and checks the JWT matrix across the gateway routes, including valid, invalid, missing, forbidden, and wrong-audience tokens. `service-1` and `service-3` return `401` for invalid JWTs, while `service-2` returns `403` because it does not validate JWTs and only accepts the `service-1` mTLS principal. Valid and denied routes are checked with the corresponding `200` and `403` expectations.
 
 ### KEDA stress test
 
