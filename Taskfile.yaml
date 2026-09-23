@@ -105,11 +105,28 @@ tasks:
       - helmfile repos
       - helmfile --skip-deps -l crd=true sync
       - helmfile --skip-deps -l crd!=true apply
-  kubectl:apply:yaml:
+  svc-1.yaml:
+    dir: ./k8s/
     env:
       INSTALL_SERVICE_1: "true"
+      SERVICE_1_NAMESPACE: "true"
+    generates:
+      - ./services/raw-manifests/svc-1.yaml
     cmds:
-      - helmfile -l installed=false template | kubectl apply -n service-1 -f -
+      - >- 
+        helmfile -l app=service-1 template
+        | yq -P '
+          (.. | select(has("metadata")) | .metadata.annotations) |= with_entries(select(.key | test("^helm\.sh/") | not)) |
+          (.. | select(has("metadata")) | .metadata.labels) |= with_entries(select(.key | test("^helm\.sh/") | not)) |
+          (.. | select(has("metadata")) | .metadata.labels) |= with_entries(select((.key == "app.kubernetes.io/managed-by" and .value == "Helm") | not))
+        '
+        > ./services/raw-manifests/svc-1.yaml
+  kapply:svc-1.yaml:
+    dir: ./k8s/services/raw-manifests/
+    deps:
+      - task: svc-1.yaml
+    cmds:
+      - kubectl apply -n service-1 -f ./svc-1.yaml
   cluster:wait_until_ready:
     vars:
       SLEEP: "10"

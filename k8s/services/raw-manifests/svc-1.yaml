@@ -1,0 +1,338 @@
+---
+# Source: application/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: service-1
+  namespace: service-1
+  labels:
+    app.kubernetes.io/name: service-1
+    app.kubernetes.io/instance: service-1
+  annotations:
+---
+# Source: application/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-1-mappings-data
+  namespace: service-1
+  labels:
+    app.kubernetes.io/name: service-1
+    app.kubernetes.io/instance: service-1
+  annotations: null
+data:
+  mappings.json: |
+
+    {
+      "mappings": [
+        {
+          "priority": 1,
+          "request": {
+            "urlPathPattern": "/(service-\\d+)(/|$)(.*)"
+          },
+          "response": {
+            "proxyBaseUrl": "http://{{request.pathSegments.[0]}}.{{request.pathSegments.[0]}}.svc.cluster.local",
+            "proxyUrlPrefixToRemove": "/{{request.pathSegments.[0]}}"
+          }
+        },
+        {
+          "priority": 10,
+          "request": {
+            "urlPathPattern": ".*"
+          },
+          "response": {
+            "status": 200,
+            "body": "{\n  \"wiremock\": {\n    \"serverTime\": \"{{now format='yyyy-MM-dd HH:mm:ssZ'}}\",\n    \"epoch\": {{now format='epoch'}},\n    \"hostname\": \"{{systemValue type='ENVIRONMENT' key='HOSTNAME'}}\",\n    \"javaVersion\": \"{{systemValue type='PROPERTY' key='java.version'}}\"\n  },\n  \"request\": {\n    \"method\": \"{{request.method}}\",\n    \"url\": \"{{request.url}}\",\n    \"protocol\": \"{{request.protocol}}\",\n    \"clientIp\": \"{{request.clientIp}}\",\n    \"headers\": {{{toJson request.headers}}},\n    \"queryParams\": {{#if request.queryParams}}{{{toJson request.queryParams}}}{{else}}{}{{/if}},\n    \"body\": {{#if request.body}}{{{request.body}}}{{else}}null{{/if}}\n  }\n}\n",
+            "headers": {
+              "Content-Type": "application/json"
+            }
+          }
+        }
+      ]
+    }
+---
+# Source: application/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-1
+  namespace: service-1
+  labels:
+    app.kubernetes.io/name: service-1
+    app.kubernetes.io/instance: service-1
+  annotations: null
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: service-1
+    application.stakater.com/workload-class: serving
+  ports:
+    - appProtocol: http
+      name: http
+      port: 80
+      targetPort: http
+---
+# Source: application/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: service-1
+    app.kubernetes.io/instance: service-1
+  annotations:
+    reloader.stakater.com/auto: "true"
+  name: service-1
+  namespace: service-1
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: service-1
+      application.stakater.com/workload-class: serving
+  strategy:
+    type: RollingUpdate
+  revisionHistoryLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: service-1
+        app.kubernetes.io/instance: service-1
+        application.stakater.com/workload-class: serving
+      annotations: null
+    spec:
+      automountServiceAccountToken: true
+      serviceAccountName: service-1
+      enableServiceLinks: true
+      containers:
+        - name: service-1
+          image: wiremock/wiremock:3.13.2
+          imagePullPolicy: IfNotPresent
+          args:
+            - --port=3000
+            - --global-response-templating
+            - --root-dir=/home/wiremock/storage
+            - --permitted-system-keys=.*
+            - --disable-gzip
+            - --verbose
+          ports:
+            - containerPort: 3000
+              name: http
+              protocol: TCP
+          volumeMounts:
+            - name: mappings-data
+              mountPath: /home/wiremock/storage/mappings
+          securityContext:
+            readOnlyRootFilesystem: false
+            runAsNonRoot: false
+      volumes:
+        - name: mappings-data
+          configMap:
+            name: service-1-mappings-data
+      terminationGracePeriodSeconds:
+---
+# Source: application/templates/extraobjects.yaml
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  labels:
+    app.kubernetes.io/instance: service-1
+    app.kubernetes.io/name: service-1
+  name: service-1-requires-jwt
+  annotations: null
+spec:
+  action: ALLOW
+  rules:
+    - when:
+        - key: request.auth.principal
+          values:
+            - '*'
+---
+# Source: application/templates/extraobjects.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/instance: service-1
+    app.kubernetes.io/name: service-1
+  name: service-1-cert
+  namespace: istio-system
+  annotations: null
+spec:
+  dnsNames:
+    - service-1.desafio-devops.local
+    - service-1.desafio-devops.lucasfcnunes.com
+  issuerRef:
+    kind: ClusterIssuer
+    name: default-issuer
+  secretName: service-1-cert
+---
+# Source: application/templates/extraobjects.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  labels:
+    app.kubernetes.io/instance: service-1
+    app.kubernetes.io/name: service-1
+  name: service-2-mtls
+  annotations: null
+spec:
+  host: service-2.service-2.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# Source: application/templates/extraobjects.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  labels:
+    app.kubernetes.io/instance: service-1
+    app.kubernetes.io/name: service-1
+  name: service-1-gateway
+  annotations: null
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - hosts:
+        - service-1.desafio-devops.local
+        - service-1.desafio-devops.lucasfcnunes.com
+      port:
+        name: http
+        number: 80
+        protocol: HTTP
+      tls:
+        httpsRedirect: true
+    - hosts:
+        - service-1.desafio-devops.local
+        - service-1.desafio-devops.lucasfcnunes.com
+      port:
+        name: https
+        number: 443
+        protocol: HTTPS
+      tls:
+        credentialName: service-1-cert
+        mode: SIMPLE
+---
+# Source: application/templates/extraobjects.yaml
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  labels:
+    app.kubernetes.io/instance: service-1
+    app.kubernetes.io/name: service-1
+  name: default
+  annotations: null
+spec:
+  mtls:
+    mode: STRICT
+---
+# Source: application/templates/extraobjects.yaml
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  labels:
+    app.kubernetes.io/instance: service-1
+    app.kubernetes.io/name: service-1
+  name: service-1-jwt
+  annotations: null
+spec:
+  jwtRules:
+    - audiences:
+        - service-1
+      issuer: https://desafio-devops.local
+      jwks: |-
+
+        {
+          "keys": [
+            {
+              "use": "sig",
+              "kty": "EC",
+              "kid": "desafio-devops-es256-1",
+              "crv": "P-256",
+              "alg": "ES256",
+              "x": "RFROKpuJWkRhhw0dLVcX1ZHojewZbVqwQB3SFULpCfU",
+              "y": "A4sEmX6jH9yw-3tN4nZlCrZVQ7qiw2wYIpwJlcynYPU"
+            }
+          ]
+        }
+---
+# Source: application/templates/extraobjects.yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  labels:
+    app.kubernetes.io/instance: service-1
+    app.kubernetes.io/name: service-1
+  name: service-1
+  annotations: null
+spec:
+  maxReplicaCount: 3
+  minReplicaCount: 1
+  scaleTargetRef:
+    name: service-1
+  triggers:
+    - metadata:
+        metricName: istio_rps_1m
+        query: |
+          sum(rate(istio_requests_total{
+            reporter="destination",
+            destination_workload_namespace="service-1",
+            destination_workload="service-1",
+          }[1m]))
+        serverAddress: http://kps-prometheus.monitoring.svc.cluster.local:9090
+        threshold: "75"
+        annotations: null
+        labels: null
+      type: prometheus
+---
+# Source: application/templates/extraobjects.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  labels:
+    app.kubernetes.io/instance: service-1
+    app.kubernetes.io/name: service-1
+  name: service-1-external-route
+  annotations: null
+spec:
+  gateways:
+    - service-1-gateway
+  hosts:
+    - service-1.desafio-devops.local
+    - service-1.desafio-devops.lucasfcnunes.com
+  http:
+    - match:
+        - uri:
+            regex: /service-2(/|$)(.*)
+      rewrite:
+        uriRegexRewrite:
+          match: /service-2(/|$)(.*)
+          rewrite: /\2
+      route:
+        - destination:
+            host: service-2.service-2.svc.cluster.local
+            port:
+              number: 80
+    - match:
+        - uri:
+            regex: /service-1(/|$)(.*)
+      rewrite:
+        uriRegexRewrite:
+          match: /service-1(/|$)(.*)
+          rewrite: /\2
+      route:
+        - destination:
+            host: service-1.service-1.svc.cluster.local
+            port:
+              number: 80
+---
+# Source: application/templates/extraobjects.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  annotations: {}
+  labels:
+    app.kubernetes.io/instance: service-1
+    app.kubernetes.io/name: service-1
+    istio-injection: enabled
+  name: service-1

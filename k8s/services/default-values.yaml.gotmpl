@@ -73,17 +73,19 @@ rbac:
 # TODO:
 # serviceMonitor:
 extraObjects:
-  # ns:
-  #   apiVersion: v1
-  #   kind: Namespace
-  #   metadata:
-  #     name: "{{`{{ .Release.Namespace }}`}}"
-  #     annotations:
-  #       helm.sh/hook: pre-install,pre-upgrade
-  #       helm.sh/hook-weight: "-5"
-  #       helm.sh/resource-policy: keep
-  #     labels:
-  #       istio-injection: enabled
+  # {{ if eq (env "SERVICE_1_NAMESPACE") "true" }}
+  ns:
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: "{{`{{ .Release.Namespace }}`}}"
+      annotations:
+        helm.sh/hook: pre-install,pre-upgrade
+        helm.sh/hook-weight: "-5"
+        helm.sh/resource-policy: keep
+      labels:
+        istio-injection: enabled
+  # {{ end }}
   peer-authn-strict:
     apiVersion: security.istio.io/v1beta1
     kind: PeerAuthentication
