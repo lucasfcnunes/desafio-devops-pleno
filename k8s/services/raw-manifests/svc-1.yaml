@@ -144,7 +144,7 @@ spec:
     - when:
         - key: request.auth.principal
           values:
-            - '*'
+            - "*"
 ---
 # Source: application/templates/extraobjects.yaml
 apiVersion: cert-manager.io/v1

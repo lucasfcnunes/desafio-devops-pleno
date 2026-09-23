@@ -183,7 +183,7 @@ export async function setup() {
 
   if (INSECURE_SKIP_TLS_VERIFY) {
     console.warn(
-      "INSECURE_SKIP_TLS_VERIFY=true. TLS certificate verification is disabled.",
+      "INSECURE_SKIP_TLS_VERIFY=true. TLS certificate verification is disabled. See https://github.com/grafana/k6/issues/218#issuecomment-301486668.",
     );
   }
   if (!FORBIDDEN_JWT) {

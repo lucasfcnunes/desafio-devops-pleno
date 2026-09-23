@@ -87,6 +87,24 @@ tasks:
           --jwks ./jwks.json \
           --iss {{.ISS}} \
           {{.AUDS_FLAGS}} > /dev/null
+  jwt:test:
+    deps:
+      - task: jwt:gen
+        vars:
+          AUDS: "service-1,service-3"
+    vars:
+      URLS:
+        - https://service-1.desafio-devops.local/service-1?route=11
+        - https://service-1.desafio-devops.local/service-1/service-2?route=112
+        - https://service-3.desafio-devops.local/service-3?route=113
+    cmds:
+      - for:
+          var: URLS
+          as: URL
+        cmd: >-
+          curl --fail-with-body --cacert ./fake-vault/tls/rootCA.pem.crt
+          -H "Authorization: Bearer $(cat ./fake-vault/jwt/token.dec.jwt)"
+          {{.URL}}
   tls-certs:cp:
     dir: ./fake-vault/tls/
     cmds:
@@ -113,7 +131,7 @@ tasks:
     generates:
       - ./services/raw-manifests/svc-1.yaml
     cmds:
-      - >- 
+      - >-
         helmfile -l app=service-1 template
         | yq -P '
           (.. | select(has("metadata")) | .metadata.annotations) |= with_entries(select(.key | test("^helm\.sh/") | not)) |
@@ -147,7 +165,14 @@ tasks:
         timeout: 30s
       # - task: jwk:setup
       - task: helmfile:sync
-      # - k6
+      - task: kapply:svc-1.yaml
+      - task: test
+  test:
+    cmds:
+      - task: mtls:test
+      - task: jwt:test
+      - task: k6:test
+      - task: k6:stress
   k6:test:
     dir: ./k6/
     deps:
